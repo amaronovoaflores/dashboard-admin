@@ -332,9 +332,30 @@ select.finput{background:white;}
       <div class="page-header">
         <div>
           <div class="page-title">Config JSON</div>
-          <div class="page-sub">Genera y descarga el config.json de cada cliente</div>
+          <div class="page-sub">Genera y publica el config.json directamente en el repo del cliente</div>
         </div>
       </div>
+
+      <!-- GitHub Token -->
+      <div class="card" style="margin-bottom:1rem;">
+        <div class="card-header">
+          <div class="card-title"><i class="ti ti-key"></i> GitHub Token</div>
+        </div>
+        <div class="card-body">
+          <div class="form-grid">
+            <div class="form-field full">
+              <label class="flbl">Token de acceso (ghp_...)</label>
+              <input type="password" class="finput" id="github-token" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+                oninput="localStorage.setItem('gh_token',this.value)"
+                style="font-family:monospace;">
+            </div>
+          </div>
+          <div style="font-size:12px;color:var(--text2);margin-top:4px;">
+            El token se guarda solo en este navegador. Necesita permiso <strong>repo</strong>.
+          </div>
+        </div>
+      </div>
+
       <div class="card">
         <div class="card-header">
           <div class="card-title"><i class="ti ti-code"></i> Selecciona cliente</div>
@@ -343,10 +364,12 @@ select.finput{background:white;}
           <div style="display:flex;gap:8px;margin-bottom:1rem;flex-wrap:wrap;" id="config-chips"></div>
           <div id="config-preview-wrap" style="display:none;">
             <div class="json-preview" id="config-preview"></div>
-            <div style="display:flex;gap:8px;margin-top:1rem;">
-              <button class="btn-primary" onclick="descargarConfig()"><i class="ti ti-download"></i> Descargar config.json</button>
+            <div style="display:flex;gap:8px;margin-top:1rem;flex-wrap:wrap;">
+              <button class="btn-primary" onclick="publicarConfig()"><i class="ti ti-rocket"></i> Publicar en GitHub</button>
+              <button class="btn-secondary" onclick="descargarConfig()"><i class="ti ti-download"></i> Descargar</button>
               <button class="btn-secondary" onclick="copiarConfig()"><i class="ti ti-copy"></i> Copiar</button>
             </div>
+            <div id="publish-status" style="margin-top:1rem;font-size:13px;display:none;padding:10px 14px;border-radius:8px;"></div>
           </div>
         </div>
       </div>
@@ -601,7 +624,7 @@ function showPage(page){
   if(page==='clientes') renderClientes();
   if(page==='vehiculos') renderVehiculos();
   if(page==='permisos') renderPermisosChips();
-  if(page==='config') renderConfigChips();
+  if(page==='config'){renderConfigChips();var t=localStorage.getItem('gh_token');if(t&&$('github-token'))$('github-token').value=t;}
   if(page==='dashboard') renderDashboard();
 }
 
@@ -958,6 +981,54 @@ function mostrarConfigPreview(idx){
   var cfg=generarConfig(idx);
   $('config-preview').textContent=JSON.stringify(cfg,null,2);
   $('config-preview-wrap').style.display='block';
+}
+
+function publicarConfig(){
+  if(CONFIG_CLIENTE_IDX===null){alert('Selecciona un cliente primero');return;}
+  var token=localStorage.getItem('gh_token')||'';
+  if(!token){alert('Ingresa tu GitHub Token arriba');return;}
+  var c=DB.clientes[CONFIG_CLIENTE_IDX];
+  var repo='dashboard-'+c.sub;
+  var owner='amaronovoaflores';
+  var cfg=generarConfig(CONFIG_CLIENTE_IDX);
+  var contenido=btoa(unescape(encodeURIComponent(JSON.stringify(cfg,null,2))));
+  var statusEl=$('publish-status');
+  statusEl.style.display='block';
+  statusEl.style.background='var(--gold-light)';
+  statusEl.style.color='var(--gold)';
+  statusEl.style.border='1px solid var(--gold-pale)';
+  statusEl.textContent='⏳ Publicando en '+owner+'/'+repo+'...';
+
+  // Primero obtener el SHA del archivo actual (necesario para actualizar)
+  var apiUrl='https://api.github.com/repos/'+owner+'/'+repo+'/contents/config.json';
+  fetch(apiUrl,{headers:{'Authorization':'token '+token,'Accept':'application/vnd.github.v3+json'}})
+  .then(function(r){return r.json();})
+  .then(function(data){
+    var sha=data.sha||null;
+    var body={message:'⚙ Admin: actualizar config.json '+new Date().toLocaleDateString('es-PE'),content:contenido};
+    if(sha) body.sha=sha;
+    return fetch(apiUrl,{
+      method:'PUT',
+      headers:{'Authorization':'token '+token,'Accept':'application/vnd.github.v3+json','Content-Type':'application/json'},
+      body:JSON.stringify(body)
+    });
+  })
+  .then(function(r){
+    if(r.ok){
+      statusEl.style.background='var(--teal)';
+      statusEl.style.color='var(--teal-mid)';
+      statusEl.style.border='1px solid #5DCAA5';
+      statusEl.textContent='✓ config.json publicado en '+owner+'/'+repo+' — el dashboard se actualiza en 1-2 minutos';
+    } else {
+      return r.json().then(function(e){throw new Error(e.message);});
+    }
+  })
+  .catch(function(err){
+    statusEl.style.background='var(--red-light)';
+    statusEl.style.color='var(--red)';
+    statusEl.style.border='1px solid #F0A0A0';
+    statusEl.textContent='✗ Error: '+err.message;
+  });
 }
 
 function descargarConfig(){
