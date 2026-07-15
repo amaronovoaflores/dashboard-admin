@@ -1,0 +1,998 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Panel Admin · Flotas</title>
+<style>
+:root{
+  --navy:#0d1b2a;--teal:#E1F5EE;--teal-mid:#0F6E56;--gold:#BA7517;
+  --gold-pale:#FAC775;--gold-light:#FAEEDA;--on-navy:#e8f4f0;--muted:#9ab8b0;
+  --red:#A32D2D;--red-light:#FDEAEA;--blue-light:#dbeafe;--blue:#1d4ed8;
+  --bg:#f8f9fa;--bg2:#f0f2f5;--border:#dee2e6;--text:#1a1a2e;--text2:#6c757d;
+  --r:8px;--font:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:var(--font);background:var(--bg);color:var(--text);}
+
+/* LOGIN */
+.login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--navy);}
+.login-card{background:white;border-radius:16px;padding:2.5rem;width:100%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,.3);}
+.login-logo{text-align:center;margin-bottom:1.5rem;}
+.login-logo-box{width:64px;height:64px;border-radius:14px;background:var(--navy);display:inline-flex;align-items:center;justify-content:center;font-size:28px;color:var(--gold-pale);margin-bottom:12px;}
+.login-title{font-size:22px;font-weight:600;color:var(--text);margin-bottom:4px;}
+.login-sub{font-size:13px;color:var(--text2);}
+.login-field{margin-bottom:1rem;}
+.login-label{font-size:12px;font-weight:500;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;display:block;}
+.login-input{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r);font-size:15px;color:var(--text);}
+.login-input:focus{outline:none;border-color:var(--gold);}
+.login-btn{width:100%;padding:12px;background:var(--navy);color:var(--gold-pale);border:1px solid var(--gold);border-radius:var(--r);font-size:15px;font-weight:600;cursor:pointer;margin-top:.5rem;}
+.login-btn:hover{opacity:.9;}
+.login-err{color:var(--red);font-size:13px;text-align:center;margin-top:.5rem;display:none;}
+
+/* LAYOUT ADMIN */
+.admin-layout{display:none;min-height:100vh;}
+.sidebar{width:240px;background:var(--navy);min-height:100vh;position:fixed;top:0;left:0;padding:1.5rem 1rem;display:flex;flex-direction:column;}
+.sidebar-logo{display:flex;align-items:center;gap:10px;margin-bottom:2rem;padding-bottom:1rem;border-bottom:1px solid rgba(255,255,255,.1);}
+.sidebar-logo-box{width:38px;height:38px;border-radius:8px;background:rgba(250,199,117,.15);display:flex;align-items:center;justify-content:center;font-size:18px;color:var(--gold-pale);border:1px solid rgba(186,117,23,.3);}
+.sidebar-title{font-size:15px;font-weight:600;color:var(--on-navy);}
+.sidebar-sub{font-size:11px;color:var(--muted);}
+.nav-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--r);font-size:14px;font-weight:500;color:var(--muted);cursor:pointer;margin-bottom:4px;text-decoration:none;}
+.nav-item:hover{background:rgba(255,255,255,.05);color:var(--on-navy);}
+.nav-item.active{background:rgba(186,117,23,.15);color:var(--gold-pale);border-left:3px solid var(--gold);}
+.nav-item i{font-size:18px;width:20px;}
+.nav-section{font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;padding:12px 12px 6px;opacity:.6;}
+.sidebar-footer{margin-top:auto;padding-top:1rem;border-top:1px solid rgba(255,255,255,.1);}
+.logout-btn{display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:var(--r);font-size:13px;color:var(--muted);cursor:pointer;width:100%;background:none;border:none;}
+.logout-btn:hover{color:var(--red-light);}
+
+.main-content{margin-left:240px;padding:2rem;min-height:100vh;}
+.page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:2rem;}
+.page-title{font-size:22px;font-weight:600;color:var(--text);}
+.page-sub{font-size:13px;color:var(--text2);margin-top:2px;}
+
+/* CARDS */
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:2rem;}
+.stat-card{background:white;border-radius:12px;padding:1.25rem;border:1px solid var(--border);}
+.stat-v{font-size:28px;font-weight:600;color:var(--text);margin-bottom:4px;}
+.stat-l{font-size:12px;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;}
+.stat-card.navy{background:var(--navy);border-color:var(--gold);}
+.stat-card.navy .stat-v{color:var(--gold-pale);}
+.stat-card.navy .stat-l{color:var(--muted);}
+
+/* TABLA CLIENTES */
+.card{background:white;border-radius:12px;border:1px solid var(--border);margin-bottom:1.5rem;overflow:hidden;}
+.card-header{padding:1rem 1.25rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+.card-title{font-size:15px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:8px;}
+.card-title i{color:var(--teal-mid);}
+.btn-primary{padding:8px 16px;background:var(--navy);color:var(--gold-pale);border:1px solid var(--gold);border-radius:var(--r);font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:6px;}
+.btn-secondary{padding:8px 14px;background:transparent;color:var(--text2);border:1px solid var(--border);border-radius:var(--r);font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px;}
+.btn-danger{padding:6px 12px;background:transparent;color:var(--red);border:1px solid var(--red);border-radius:var(--r);font-size:12px;cursor:pointer;}
+.card-body{padding:1.25rem;}
+
+.tbl{width:100%;border-collapse:collapse;font-size:13px;}
+.tbl th{text-align:left;padding:8px 12px;font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid var(--border);background:var(--bg);}
+.tbl td{padding:12px;border-bottom:1px solid var(--border);color:var(--text);vertical-align:middle;}
+.tbl tr:last-child td{border-bottom:none;}
+.tbl tr:hover td{background:var(--bg);}
+.badge{padding:3px 10px;border-radius:99px;font-size:11px;font-weight:600;}
+.badge.activo{background:#E1F5EE;color:#0F6E56;border:1px solid #5DCAA5;}
+.badge.pendiente{background:var(--gold-light);color:var(--gold);border:1px solid var(--gold-pale);}
+.badge.inactivo{background:var(--bg2);color:var(--text2);border:1px solid var(--border);}
+.avatar{width:36px;height:36px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;flex-shrink:0;}
+.actions-cell{display:flex;gap:6px;align-items:center;}
+
+/* FORMULARIO */
+.form-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;align-items:center;justify-content:center;}
+.form-overlay.open{display:flex;}
+.form-card{background:white;border-radius:16px;padding:2rem;width:100%;max-width:600px;max-height:90vh;overflow-y:auto;}
+.form-title{font-size:18px;font-weight:600;color:var(--text);margin-bottom:1.5rem;display:flex;align-items:center;justify-content:space-between;}
+.form-close{background:none;border:none;font-size:20px;cursor:pointer;color:var(--text2);}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:1rem;}
+.form-field{display:flex;flex-direction:column;gap:5px;}
+.form-field.full{grid-column:1/-1;}
+.flbl{font-size:12px;font-weight:500;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;}
+.finput{padding:9px 12px;border:1px solid var(--border);border-radius:var(--r);font-size:14px;color:var(--text);}
+.finput:focus{outline:none;border-color:var(--gold);}
+select.finput{background:white;}
+.form-section{font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin:1.25rem 0 .75rem;padding-bottom:6px;border-bottom:1px solid var(--border);}
+.form-actions{display:flex;gap:10px;margin-top:1.5rem;justify-content:flex-end;}
+
+/* PERMISOS */
+.perm-group{margin-bottom:1.5rem;}
+.perm-group-title{font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border);}
+.perm-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);}
+.perm-row:last-child{border-bottom:none;}
+.perm-label{font-size:14px;color:var(--text);}
+.perm-sub{font-size:12px;color:var(--text2);margin-top:2px;}
+.toggle{position:relative;width:44px;height:24px;cursor:pointer;flex-shrink:0;}
+.toggle input{opacity:0;width:0;height:0;}
+.toggle-slider{position:absolute;inset:0;background:#ccc;border-radius:24px;transition:.2s;}
+.toggle-slider:before{content:'';position:absolute;width:20px;height:20px;left:2px;top:2px;background:white;border-radius:50%;transition:.2s;}
+.toggle input:checked+.toggle-slider{background:var(--teal-mid);}
+.toggle input:checked+.toggle-slider:before{transform:translateX(20px);}
+
+/* VEHÍCULOS */
+.veh-card{background:var(--bg2);border-radius:10px;padding:1rem;border:1px solid var(--border);margin-bottom:10px;display:flex;align-items:center;gap:12px;}
+.veh-placa{font-size:16px;font-weight:600;color:var(--text);min-width:80px;}
+.veh-info{flex:1;}
+.veh-desc{font-size:13px;color:var(--text2);}
+.veh-tags{display:flex;gap:6px;margin-top:4px;flex-wrap:wrap;}
+.vtag{padding:2px 8px;border-radius:99px;font-size:11px;font-weight:500;}
+.vtag.gps{background:var(--blue-light);color:var(--blue);border:1px solid #60a5fa;}
+.vtag.cliente{background:var(--teal);color:var(--teal-mid);border:1px solid #5DCAA5;}
+.vtag.stby{background:var(--bg2);color:var(--text2);border:1px dashed var(--border);}
+
+/* CONFIG JSON */
+.json-preview{background:#1e2d3d;border-radius:var(--r);padding:1rem;font-family:monospace;font-size:12px;color:#e8f4f0;overflow-x:auto;max-height:300px;overflow-y:auto;white-space:pre;}
+
+/* TABS */
+.tabs{display:flex;gap:4px;background:var(--bg2);padding:4px;border-radius:10px;border:1px solid var(--border);margin-bottom:1.5rem;}
+.tab{flex:1;padding:8px;text-align:center;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;color:var(--text2);}
+.tab.active{background:var(--navy);color:var(--gold-pale);}
+
+/* ALERTAS BAR */
+.alert-bar{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:var(--r);margin-bottom:1rem;font-size:13px;}
+.alert-bar.warn{background:var(--gold-light);color:var(--gold);border:1px solid var(--gold-pale);}
+.alert-bar.info{background:var(--teal);color:var(--teal-mid);border:1px solid #5DCAA5;}
+
+/* URL CHIP */
+.url-chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:99px;font-size:11px;font-weight:500;background:var(--navy);color:var(--gold-pale);border:1px solid var(--gold);}
+
+@media(max-width:768px){
+  .sidebar{display:none;}
+  .main-content{margin-left:0;}
+  .stats-grid{grid-template-columns:repeat(2,1fr);}
+  .form-grid{grid-template-columns:1fr;}
+}
+</style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+</head>
+<body>
+
+<!-- ══ LOGIN ══ -->
+<div class="login-wrap" id="login-wrap">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="login-logo-box">⚙</div>
+      <div class="login-title">Panel Admin</div>
+      <div class="login-sub">Acceso exclusivo administrador</div>
+    </div>
+    <div class="login-field">
+      <label class="login-label">Usuario</label>
+      <input type="text" class="login-input" id="login-user" placeholder="admin" autocomplete="off">
+    </div>
+    <div class="login-field">
+      <label class="login-label">Contraseña</label>
+      <input type="password" class="login-input" id="login-pass" placeholder="••••••••">
+    </div>
+    <button class="login-btn" id="login-btn">Ingresar</button>
+    <div class="login-err" id="login-err">Usuario o contraseña incorrectos</div>
+  </div>
+</div>
+
+<!-- ══ ADMIN LAYOUT ══ -->
+<div class="admin-layout" id="admin-layout">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="sidebar-logo">
+      <div class="sidebar-logo-box">⚙</div>
+      <div>
+        <div class="sidebar-title">Panel Admin</div>
+        <div class="sidebar-sub">dash.net.pe</div>
+      </div>
+    </div>
+
+    <div class="nav-section">Principal</div>
+    <a class="nav-item active" onclick="showPage('dashboard')" id="nav-dashboard">
+      <i class="ti ti-layout-dashboard"></i> Inicio
+    </a>
+    <a class="nav-item" onclick="showPage('clientes')" id="nav-clientes">
+      <i class="ti ti-users"></i> Clientes
+    </a>
+    <a class="nav-item" onclick="showPage('vehiculos')" id="nav-vehiculos">
+      <i class="ti ti-truck"></i> Vehículos
+    </a>
+
+    <div class="nav-section">Configuración</div>
+    <a class="nav-item" onclick="showPage('permisos')" id="nav-permisos">
+      <i class="ti ti-shield-check"></i> Permisos
+    </a>
+    <a class="nav-item" onclick="showPage('config')" id="nav-config">
+      <i class="ti ti-code"></i> Config JSON
+    </a>
+    <a class="nav-item" onclick="showPage('importar')" id="nav-importar">
+      <i class="ti ti-upload"></i> Importar datos
+    </a>
+
+    <div class="sidebar-footer">
+      <button class="logout-btn" onclick="logout()">
+        <i class="ti ti-logout"></i> Cerrar sesión
+      </button>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main-content">
+
+    <!-- ── INICIO ── -->
+    <div id="page-dashboard">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Panel de administración</div>
+          <div class="page-sub" id="fecha-hoy">—</div>
+        </div>
+        <button class="btn-primary" onclick="showPage('clientes')">
+          <i class="ti ti-plus"></i> Nuevo cliente
+        </button>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card navy">
+          <div class="stat-v" id="stat-clientes">0</div>
+          <div class="stat-l">Clientes activos</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-v" id="stat-vehiculos">0</div>
+          <div class="stat-l">Vehículos registrados</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-v" id="stat-activos">0</div>
+          <div class="stat-l">Vehículos activos</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-v" id="stat-standby">0</div>
+          <div class="stat-l">En standby</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><i class="ti ti-users"></i> Clientes recientes</div>
+          <button class="btn-secondary" onclick="showPage('clientes')">Ver todos</button>
+        </div>
+        <div class="card-body" style="padding:0;">
+          <table class="tbl" id="dashboard-clientes-tbl">
+            <thead><tr>
+              <th>Cliente</th><th>Subdominio</th><th>Vehículos</th><th>Contrato hasta</th><th>Estado</th>
+            </tr></thead>
+            <tbody id="dashboard-clientes-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── CLIENTES ── -->
+    <div id="page-clientes" style="display:none;">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Clientes</div>
+          <div class="page-sub">Gestiona todos los clientes del sistema</div>
+        </div>
+        <button class="btn-primary" onclick="abrirFormCliente()">
+          <i class="ti ti-plus"></i> Nuevo cliente
+        </button>
+      </div>
+      <div class="card">
+        <div class="card-body" style="padding:0;">
+          <table class="tbl">
+            <thead><tr>
+              <th>Empresa</th><th>Subdominio</th><th>GPS</th><th>Vehículos</th><th>Contrato</th><th>Estado</th><th>Acciones</th>
+            </tr></thead>
+            <tbody id="clientes-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── VEHÍCULOS ── -->
+    <div id="page-vehiculos" style="display:none;">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Vehículos</div>
+          <div class="page-sub">Todas las placas registradas</div>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <select class="finput" id="filtro-cliente-veh" style="width:200px;" onchange="renderVehiculos()">
+            <option value="">Todos los clientes</option>
+          </select>
+          <button class="btn-primary" onclick="abrirFormVehiculo()">
+            <i class="ti ti-plus"></i> Nuevo vehículo
+          </button>
+        </div>
+      </div>
+      <div id="vehiculos-list"></div>
+    </div>
+
+    <!-- ── PERMISOS ── -->
+    <div id="page-permisos" style="display:none;">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Permisos</div>
+          <div class="page-sub">Configura qué puede hacer cada cliente</div>
+        </div>
+      </div>
+      <div class="alert-bar info">
+        <i class="ti ti-info-circle"></i>
+        Selecciona un cliente para ver y editar sus permisos
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:1.5rem;flex-wrap:wrap;" id="cliente-perm-chips"></div>
+      <div class="card" id="permisos-card" style="display:none;">
+        <div class="card-header">
+          <div class="card-title" id="permisos-cliente-title"><i class="ti ti-shield-check"></i> —</div>
+          <button class="btn-primary" onclick="guardarPermisos()"><i class="ti ti-device-floppy"></i> Guardar</button>
+        </div>
+        <div class="card-body" id="permisos-body"></div>
+      </div>
+    </div>
+
+    <!-- ── CONFIG JSON ── -->
+    <div id="page-config" style="display:none;">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Config JSON</div>
+          <div class="page-sub">Genera y descarga el config.json de cada cliente</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><i class="ti ti-code"></i> Selecciona cliente</div>
+        </div>
+        <div class="card-body">
+          <div style="display:flex;gap:8px;margin-bottom:1rem;flex-wrap:wrap;" id="config-chips"></div>
+          <div id="config-preview-wrap" style="display:none;">
+            <div class="json-preview" id="config-preview"></div>
+            <div style="display:flex;gap:8px;margin-top:1rem;">
+              <button class="btn-primary" onclick="descargarConfig()"><i class="ti ti-download"></i> Descargar config.json</button>
+              <button class="btn-secondary" onclick="copiarConfig()"><i class="ti ti-copy"></i> Copiar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── IMPORTAR ── -->
+    <div id="page-importar" style="display:none;">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Importar datos</div>
+          <div class="page-sub">Carga mantenimientos, llantas y tareos desde archivos</div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;">
+        <div class="card" style="cursor:pointer;" onclick="alert('Próximamente: importar desde Excel')">
+          <div class="card-body" style="text-align:center;padding:2rem;">
+            <div style="font-size:40px;margin-bottom:12px;color:var(--teal-mid);">📊</div>
+            <div style="font-size:16px;font-weight:600;margin-bottom:6px;">Excel</div>
+            <div style="font-size:13px;color:var(--text2);">Tareo, mantenimientos, llantas</div>
+          </div>
+        </div>
+        <div class="card" style="cursor:pointer;" onclick="alert('Próximamente: importar desde PDF')">
+          <div class="card-body" style="text-align:center;padding:2rem;">
+            <div style="font-size:40px;margin-bottom:12px;color:var(--red);">📄</div>
+            <div style="font-size:16px;font-weight:600;margin-bottom:6px;">PDF</div>
+            <div style="font-size:13px;color:var(--text2);">Extracción automática de datos</div>
+          </div>
+        </div>
+        <div class="card" style="cursor:pointer;" onclick="showPage('clientes')">
+          <div class="card-body" style="text-align:center;padding:2rem;">
+            <div style="font-size:40px;margin-bottom:12px;color:var(--gold);">✏️</div>
+            <div style="font-size:16px;font-weight:600;margin-bottom:6px;">Manual</div>
+            <div style="font-size:13px;color:var(--text2);">Formulario campo a campo</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- end main-content -->
+</div><!-- end admin-layout -->
+
+<!-- ══ MODAL CLIENTE ══ -->
+<div class="form-overlay" id="modal-cliente">
+  <div class="form-card">
+    <div class="form-title">
+      <span id="modal-cliente-title">Nuevo cliente</span>
+      <button class="form-close" onclick="cerrarModal('modal-cliente')">✕</button>
+    </div>
+    <div class="form-section">Datos de empresa</div>
+    <div class="form-grid">
+      <div class="form-field"><label class="flbl">Nombre empresa</label><input type="text" class="finput" id="c-nombre" placeholder="Meritano SAC"></div>
+      <div class="form-field"><label class="flbl">RUC</label><input type="text" class="finput" id="c-ruc" placeholder="20XXXXXXXXXX"></div>
+      <div class="form-field"><label class="flbl">Subdominio</label><input type="text" class="finput" id="c-sub" placeholder="meritano" oninput="updateSubPreview()"></div>
+      <div class="form-field"><label class="flbl">URL resultante</label><input type="text" class="finput" id="c-url-preview" readonly style="color:var(--text2);background:var(--bg2);"></div>
+      <div class="form-field"><label class="flbl">Contrato hasta</label><input type="date" class="finput" id="c-contrato"></div>
+      <div class="form-field"><label class="flbl">Estado</label>
+        <select class="finput" id="c-estado">
+          <option value="activo">Activo</option>
+          <option value="pendiente">Configuración pendiente</option>
+          <option value="inactivo">Inactivo</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-section">GPS (aplica a todos los vehículos)</div>
+    <div class="form-grid">
+      <div class="form-field"><label class="flbl">Empresa GPS</label>
+        <select class="finput" id="c-gps-empresa">
+          <option value="hunter">Hunter GPS</option>
+          <option value="comsatel">Comsatel</option>
+          <option value="tracklink">Tracklink</option>
+          <option value="otro">Otro</option>
+        </select>
+      </div>
+      <div class="form-field"><label class="flbl">Usuario GPS</label><input type="text" class="finput" id="c-gps-user" placeholder="RUC o usuario"></div>
+      <div class="form-field full"><label class="flbl">Clave GPS</label><input type="password" class="finput" id="c-gps-pass" placeholder="••••••••"></div>
+    </div>
+    <div class="form-section">Cuentas bancarias</div>
+    <div class="form-grid">
+      <div class="form-field"><label class="flbl">BCP — Cuenta soles</label><input type="text" class="finput" id="c-bcp" placeholder="19403144467028"></div>
+      <div class="form-field"><label class="flbl">BCP — CCI</label><input type="text" class="finput" id="c-cci" placeholder="00219410314446702899"></div>
+      <div class="form-field full"><label class="flbl">Banco de la Nación — Detracción</label><input type="text" class="finput" id="c-bn" placeholder="00058592412"></div>
+    </div>
+    <div class="form-section">Contratistas / Clientes</div>
+    <div id="contratistas-list" style="margin-bottom:1rem;"></div>
+    <button class="btn-secondary" onclick="agregarContratista()" style="margin-bottom:1rem;"><i class="ti ti-plus"></i> Agregar contratista</button>
+    <div class="form-actions">
+      <button class="btn-secondary" onclick="cerrarModal('modal-cliente')">Cancelar</button>
+      <button class="btn-primary" onclick="guardarCliente()"><i class="ti ti-device-floppy"></i> Guardar cliente</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL VEHÍCULO ══ -->
+<div class="form-overlay" id="modal-vehiculo">
+  <div class="form-card">
+    <div class="form-title">
+      <span id="modal-veh-title">Nuevo vehículo</span>
+      <button class="form-close" onclick="cerrarModal('modal-vehiculo')">✕</button>
+    </div>
+    <div class="form-grid">
+      <div class="form-field"><label class="flbl">Cliente</label>
+        <select class="finput" id="v-cliente"></select>
+      </div>
+      <div class="form-field"><label class="flbl">Placa</label><input type="text" class="finput" id="v-placa" placeholder="BZR-712"></div>
+      <div class="form-field full"><label class="flbl">Descripción</label><input type="text" class="finput" id="v-desc" placeholder="Toyota Hilux 4x4"></div>
+      <div class="form-field"><label class="flbl">Tarifa por día (S/)</label><input type="number" class="finput" id="v-tarifa-dia" value="270"></div>
+      <div class="form-field"><label class="flbl">Tarifa km adicional (S/)</label><input type="number" class="finput" id="v-tarifa-km" value="1.35" step="0.01"></div>
+      <div class="form-field"><label class="flbl">Límite kms/día</label><input type="number" class="finput" id="v-limite" value="200"></div>
+      <div class="form-field"><label class="flbl">Cuota banco (USD/mes)</label><input type="number" class="finput" id="v-cuota" value="0"></div>
+      <div class="form-field"><label class="flbl">Tipo de cambio (S/)</label><input type="number" class="finput" id="v-tc" value="3.50" step="0.01"></div>
+      <div class="form-field full"><label class="flbl">Asignado a contratista</label>
+        <select class="finput" id="v-contratista">
+          <option value="">— Standby —</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-section">Seguros</div>
+    <div id="seguros-list" style="margin-bottom:1rem;"></div>
+    <button class="btn-secondary" onclick="agregarSeguro()" style="margin-bottom:1rem;"><i class="ti ti-plus"></i> Agregar seguro</button>
+    <div class="form-actions">
+      <button class="btn-secondary" onclick="cerrarModal('modal-vehiculo')">Cancelar</button>
+      <button class="btn-primary" onclick="guardarVehiculo()"><i class="ti ti-device-floppy"></i> Guardar vehículo</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── DATOS ──────────────────────────────────────────────────────────────
+var ADMIN_USER='admin';
+var ADMIN_PASS='flotas2026'; // cambiar después de primer login
+
+var DB={clientes:[],vehiculos:[]};
+var CLIENTE_EDIT_IDX=null;
+var VEH_EDIT_IDX=null;
+var PERM_CLIENTE_IDX=null;
+var CONFIG_CLIENTE_IDX=null;
+
+var PERMISOS_DEF={
+  ver_placas:true,
+  cambiar_asignacion:false,
+  tareo_placa:true,
+  tareo_cliente:true,
+  mes_completo:true,
+  editar_tareo:false,
+  ver_valorizacion:true,
+  guardar_val:true,
+  editar_val:false,
+  ver_economico:false,
+  agregar_mantos:false,
+  ver_odometro:true,
+  editar_empresa:false,
+  editar_cuentas:false,
+  editar_tarifas:false
+};
+
+var PERMISOS_LABELS=[
+  {key:'ver_placas',     label:'Ver placas y descripción',        group:'Vehículos'},
+  {key:'cambiar_asignacion',label:'Cambiar asignación de placa',  group:'Vehículos',sub:'Mover entre contratistas o standby'},
+  {key:'tareo_placa',   label:'Tareo por placa',                  group:'Tareo'},
+  {key:'tareo_cliente', label:'Tareo por cliente',                group:'Tareo'},
+  {key:'mes_completo',  label:'Usar "Mes completo"',              group:'Tareo'},
+  {key:'editar_tareo',  label:'Editar tareo guardado',            group:'Tareo'},
+  {key:'ver_valorizacion',label:'Ver valorización',               group:'Valorización'},
+  {key:'guardar_val',   label:'Guardar e imprimir',               group:'Valorización'},
+  {key:'editar_val',    label:'Editar valorización guardada',     group:'Valorización'},
+  {key:'ver_economico', label:'Ver análisis económico',           group:'Datos operativos',sub:'Costos, S//km, mantenimientos'},
+  {key:'agregar_mantos',label:'Agregar mantenimientos y llantas', group:'Datos operativos'},
+  {key:'ver_odometro',  label:'Ver odómetro y kms diarios',       group:'Datos operativos'},
+  {key:'editar_empresa',label:'Editar nombre y RUC',              group:'Configuración propia'},
+  {key:'editar_cuentas',label:'Editar cuentas bancarias',         group:'Configuración propia'},
+  {key:'editar_tarifas',label:'Editar tarifas',                   group:'Configuración propia',sub:'Tarifa día, km, límite'}
+];
+
+// ── LOGIN ──────────────────────────────────────────────────────────────
+function $(id){return document.getElementById(id);}
+
+document.addEventListener('DOMContentLoaded',function(){
+  // Verificar sesión guardada
+  if(localStorage.getItem('admin_session')==='ok'){
+    mostrarAdmin();
+  }
+
+  $('login-btn').addEventListener('click',tryLogin);
+  $('login-pass').addEventListener('keydown',function(e){if(e.key==='Enter')tryLogin();});
+  $('login-user').addEventListener('keydown',function(e){if(e.key==='Enter')tryLogin();});
+});
+
+function tryLogin(){
+  var u=$('login-user').value.trim();
+  var p=$('login-pass').value.trim();
+  if(u===ADMIN_USER&&p===ADMIN_PASS){
+    localStorage.setItem('admin_session','ok');
+    mostrarAdmin();
+  } else {
+    $('login-err').style.display='block';
+    $('login-pass').value='';
+  }
+}
+
+function logout(){
+  localStorage.removeItem('admin_session');
+  location.reload();
+}
+
+function mostrarAdmin(){
+  $('login-wrap').style.display='none';
+  $('admin-layout').style.display='flex';
+  cargarDatos();
+  $('fecha-hoy').textContent='Hoy '+new Date().toLocaleDateString('es-PE',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+  renderDashboard();
+}
+
+// ── DATOS LOCAL STORAGE ────────────────────────────────────────────────
+function cargarDatos(){
+  var saved=localStorage.getItem('flotas_db');
+  if(saved){
+    try{DB=JSON.parse(saved);}catch(e){DB={clientes:[],vehiculos:[]};}
+  }
+  // Datos de ejemplo si está vacío
+  if(DB.clientes.length===0){
+    DB.clientes=[
+      {id:1,nombre:'Meritano SAC',ruc:'20504628036',sub:'bzr712',contrato:'2026-09-23',estado:'activo',
+       gps:{empresa:'hunter',usuario:'10093901971',clave:'Civil280906$'},
+       cuentas:{bcp:'19403144467028',cci:'00219410314446702899',bn:'00058592412'},
+       contratistas:['Chess Consulting & Project SAC'],
+       permisos:Object.assign({},PERMISOS_DEF)},
+      {id:2,nombre:'Pedro Construcciones SAC',ruc:'20603584725',sub:'pedro',contrato:'2026-12-31',estado:'activo',
+       gps:{empresa:'hunter',usuario:'',clave:''},
+       cuentas:{bcp:'',cci:'',bn:''},
+       contratistas:['Contratista Principal SAC'],
+       permisos:Object.assign({},PERMISOS_DEF)}
+    ];
+    DB.vehiculos=[
+      {id:1,cliente_id:1,placa:'BZR-712',desc:'Toyota Hilux 4x4',tarifa_dia:270,tarifa_km:1.35,limite:200,cuota:967,tc:3.50,contratista:'Chess Consulting & Project SAC',seguros:[{inicio:'2025-06-01',fin:'2026-05-31',monto:2100},{inicio:'2026-06-01',fin:'2027-05-31',monto:1900}]},
+      {id:2,cliente_id:2,placa:'ABC-123',desc:'Toyota Hilux 4x4',tarifa_dia:300,tarifa_km:1.35,limite:200,cuota:0,tc:3.50,contratista:'',seguros:[]}
+    ];
+    guardarDatos();
+  }
+}
+
+function guardarDatos(){
+  localStorage.setItem('flotas_db',JSON.stringify(DB));
+}
+
+// ── NAVEGACIÓN ─────────────────────────────────────────────────────────
+function showPage(page){
+  ['dashboard','clientes','vehiculos','permisos','config','importar'].forEach(function(p){
+    $('page-'+p).style.display=p===page?'block':'none';
+    var nav=$('nav-'+p);
+    if(nav) nav.classList.toggle('active',p===page);
+  });
+  if(page==='clientes') renderClientes();
+  if(page==='vehiculos') renderVehiculos();
+  if(page==='permisos') renderPermisosChips();
+  if(page==='config') renderConfigChips();
+  if(page==='dashboard') renderDashboard();
+}
+
+// ── DASHBOARD ──────────────────────────────────────────────────────────
+function renderDashboard(){
+  var activos=DB.clientes.filter(function(c){return c.estado==='activo';}).length;
+  var totalVeh=DB.vehiculos.length;
+  var activosVeh=DB.vehiculos.filter(function(v){return v.contratista;}).length;
+  var standby=totalVeh-activosVeh;
+  $('stat-clientes').textContent=activos;
+  $('stat-vehiculos').textContent=totalVeh;
+  $('stat-activos').textContent=activosVeh;
+  $('stat-standby').textContent=standby;
+
+  var tbody=$('dashboard-clientes-body');tbody.innerHTML='';
+  DB.clientes.forEach(function(c){
+    var vehs=DB.vehiculos.filter(function(v){return v.cliente_id===c.id;}).length;
+    var tr=document.createElement('tr');
+    tr.innerHTML='<td><strong>'+c.nombre+'</strong><br><small style="color:var(--text2);">'+c.ruc+'</small></td>'+
+      '<td><span class="url-chip">'+c.sub+'.dash.net.pe</span></td>'+
+      '<td>'+vehs+' placas</td>'+
+      '<td>'+(c.contrato?formatFecha(c.contrato):'—')+'</td>'+
+      '<td><span class="badge '+c.estado+'">'+c.estado+'</span></td>';
+    tbody.appendChild(tr);
+  });
+}
+
+// ── CLIENTES ───────────────────────────────────────────────────────────
+function renderClientes(){
+  var tbody=$('clientes-tbody');tbody.innerHTML='';
+  DB.clientes.forEach(function(c,i){
+    var vehs=DB.vehiculos.filter(function(v){return v.cliente_id===c.id;}).length;
+    var initials=c.nombre.split(' ').slice(0,2).map(function(w){return w[0];}).join('').toUpperCase();
+    var tr=document.createElement('tr');
+    tr.innerHTML=
+      '<td><div style="display:flex;align-items:center;gap:10px;">'+
+        '<div class="avatar" style="background:var(--teal);color:var(--teal-mid);">'+initials+'</div>'+
+        '<div><strong>'+c.nombre+'</strong><br><small style="color:var(--text2);">'+c.ruc+'</small></div></div></td>'+
+      '<td><span class="url-chip">'+c.sub+'.dash.net.pe</span></td>'+
+      '<td>'+c.gps.empresa+'</td>'+
+      '<td>'+vehs+' placas</td>'+
+      '<td>'+(c.contrato?formatFecha(c.contrato):'—')+'</td>'+
+      '<td><span class="badge '+c.estado+'">'+c.estado+'</span></td>'+
+      '<td><div class="actions-cell">'+
+        '<button class="btn-secondary" onclick="editarCliente('+i+')"><i class="ti ti-edit"></i> Editar</button>'+
+        '<button class="btn-danger" onclick="eliminarCliente('+i+')"><i class="ti ti-trash"></i></button>'+
+      '</div></td>';
+    tbody.appendChild(tr);
+  });
+}
+
+function abrirFormCliente(idx){
+  CLIENTE_EDIT_IDX=(idx!==undefined)?idx:null;
+  var c=idx!==undefined?DB.clientes[idx]:{};
+  $('modal-cliente-title').textContent=idx!==undefined?'Editar cliente':'Nuevo cliente';
+  $('c-nombre').value=c.nombre||'';
+  $('c-ruc').value=c.ruc||'';
+  $('c-sub').value=c.sub||'';
+  $('c-contrato').value=c.contrato||'';
+  $('c-estado').value=c.estado||'activo';
+  $('c-gps-empresa').value=(c.gps&&c.gps.empresa)||'hunter';
+  $('c-gps-user').value=(c.gps&&c.gps.usuario)||'';
+  $('c-gps-pass').value=(c.gps&&c.gps.clave)||'';
+  $('c-bcp').value=(c.cuentas&&c.cuentas.bcp)||'';
+  $('c-cci').value=(c.cuentas&&c.cuentas.cci)||'';
+  $('c-bn').value=(c.cuentas&&c.cuentas.bn)||'';
+  updateSubPreview();
+  renderContratistas(c.contratistas||[]);
+  $('modal-cliente').classList.add('open');
+}
+
+function editarCliente(i){abrirFormCliente(i);}
+
+function eliminarCliente(i){
+  if(!confirm('¿Eliminar cliente '+DB.clientes[i].nombre+'?')) return;
+  DB.clientes.splice(i,1);
+  guardarDatos();renderClientes();renderDashboard();
+}
+
+function updateSubPreview(){
+  var sub=$('c-sub').value.trim().toLowerCase().replace(/\s+/g,'-');
+  $('c-url-preview').value=sub?sub+'.dash.net.pe':'';
+}
+
+var _contratistas=[];
+function renderContratistas(list){
+  _contratistas=[...list];
+  var el=$('contratistas-list');el.innerHTML='';
+  _contratistas.forEach(function(c,i){
+    var d=document.createElement('div');
+    d.style.cssText='display:flex;gap:8px;margin-bottom:8px;';
+    d.innerHTML='<input type="text" class="finput" value="'+c+'" style="flex:1;" onchange="_contratistas['+i+']=this.value">'+
+      '<button onclick="_contratistas.splice('+i+',1);renderContratistas(_contratistas);" style="padding:6px 10px;border:1px solid var(--border);border-radius:var(--r);cursor:pointer;background:none;color:var(--red);">✕</button>';
+    el.appendChild(d);
+  });
+}
+function agregarContratista(){_contratistas.push('');renderContratistas(_contratistas);}
+
+function guardarCliente(){
+  var c={
+    id: CLIENTE_EDIT_IDX!==null?DB.clientes[CLIENTE_EDIT_IDX].id:Date.now(),
+    nombre:$('c-nombre').value.trim(),
+    ruc:$('c-ruc').value.trim(),
+    sub:$('c-sub').value.trim().toLowerCase(),
+    contrato:$('c-contrato').value,
+    estado:$('c-estado').value,
+    gps:{empresa:$('c-gps-empresa').value,usuario:$('c-gps-user').value,clave:$('c-gps-pass').value},
+    cuentas:{bcp:$('c-bcp').value.trim(),cci:$('c-cci').value.trim(),bn:$('c-bn').value.trim()},
+    contratistas:_contratistas.filter(function(x){return x.trim();}),
+    permisos:CLIENTE_EDIT_IDX!==null?DB.clientes[CLIENTE_EDIT_IDX].permisos:Object.assign({},PERMISOS_DEF)
+  };
+  if(!c.nombre){alert('Ingresa el nombre de la empresa');return;}
+  if(!c.sub){alert('Ingresa el subdominio');return;}
+  if(CLIENTE_EDIT_IDX!==null){DB.clientes[CLIENTE_EDIT_IDX]=c;}
+  else{DB.clientes.push(c);}
+  guardarDatos();
+  cerrarModal('modal-cliente');
+  renderClientes();renderDashboard();
+}
+
+// ── VEHÍCULOS ──────────────────────────────────────────────────────────
+function renderVehiculos(){
+  // Poblar filtro
+  var sel=$('filtro-cliente-veh');
+  var curVal=sel.value;
+  sel.innerHTML='<option value="">Todos los clientes</option>';
+  DB.clientes.forEach(function(c){
+    var o=document.createElement('option');o.value=c.id;o.textContent=c.nombre;
+    sel.appendChild(o);
+  });
+  sel.value=curVal;
+
+  var filtro=sel.value?parseInt(sel.value):null;
+  var vehs=filtro?DB.vehiculos.filter(function(v){return v.cliente_id===filtro;}):DB.vehiculos;
+  var el=$('vehiculos-list');el.innerHTML='';
+  if(vehs.length===0){
+    el.innerHTML='<div class="card"><div class="card-body" style="text-align:center;color:var(--text2);padding:2rem;">No hay vehículos registrados</div></div>';
+    return;
+  }
+  vehs.forEach(function(v,i){
+    var realIdx=DB.vehiculos.indexOf(v);
+    var cliente=DB.clientes.find(function(c){return c.id===v.cliente_id;});
+    var d=document.createElement('div');
+    d.className='veh-card';
+    d.innerHTML=
+      '<div class="veh-placa">'+v.placa+'</div>'+
+      '<div class="veh-info">'+
+        '<div class="veh-desc">'+v.desc+' · S/'+v.tarifa_dia+'/día · '+v.limite+' km límite</div>'+
+        '<div class="veh-tags">'+
+          '<span class="vtag '+(v.contratista?'cliente':'stby')+'">'+( v.contratista||'Standby')+'</span>'+
+          (cliente?'<span class="vtag gps">'+((cliente.gps&&cliente.gps.empresa)||'GPS')+'</span>':'')+
+        '</div>'+
+      '</div>'+
+      '<div style="display:flex;gap:6px;">'+
+        '<button class="btn-secondary" onclick="editarVehiculo('+realIdx+')"><i class="ti ti-edit"></i> Editar</button>'+
+        '<button class="btn-danger" onclick="eliminarVehiculo('+realIdx+')"><i class="ti ti-trash"></i></button>'+
+      '</div>';
+    el.appendChild(d);
+  });
+}
+
+function abrirFormVehiculo(idx){
+  VEH_EDIT_IDX=(idx!==undefined)?idx:null;
+  var v=idx!==undefined?DB.vehiculos[idx]:{};
+  $('modal-veh-title').textContent=idx!==undefined?'Editar vehículo':'Nuevo vehículo';
+
+  // Poblar selector clientes
+  var selC=$('v-cliente');selC.innerHTML='';
+  DB.clientes.forEach(function(c){
+    var o=document.createElement('option');o.value=c.id;o.textContent=c.nombre;
+    selC.appendChild(o);
+  });
+  if(v.cliente_id) selC.value=v.cliente_id;
+
+  $('v-placa').value=v.placa||'';
+  $('v-desc').value=v.desc||'';
+  $('v-tarifa-dia').value=v.tarifa_dia||270;
+  $('v-tarifa-km').value=v.tarifa_km||1.35;
+  $('v-limite').value=v.limite||200;
+  $('v-cuota').value=v.cuota||0;
+  $('v-tc').value=v.tc||3.50;
+
+  // Poblar contratistas del cliente
+  actualizarContratistasSel(v.contratista||'');
+  selC.onchange=function(){actualizarContratistasSel('');};
+
+  renderSeguros(v.seguros||[]);
+  $('modal-vehiculo').classList.add('open');
+}
+
+function actualizarContratistasSel(selected){
+  var cId=parseInt($('v-cliente').value);
+  var cliente=DB.clientes.find(function(c){return c.id===cId;});
+  var sel=$('v-contratista');sel.innerHTML='<option value="">— Standby —</option>';
+  if(cliente&&cliente.contratistas){
+    cliente.contratistas.forEach(function(ct){
+      var o=document.createElement('option');o.value=ct;o.textContent=ct;
+      sel.appendChild(o);
+    });
+  }
+  sel.value=selected;
+}
+
+function editarVehiculo(i){abrirFormVehiculo(i);}
+function eliminarVehiculo(i){
+  if(!confirm('¿Eliminar vehículo '+DB.vehiculos[i].placa+'?')) return;
+  DB.vehiculos.splice(i,1);guardarDatos();renderVehiculos();
+}
+
+var _seguros=[];
+function renderSeguros(list){
+  _seguros=JSON.parse(JSON.stringify(list));
+  var el=$('seguros-list');el.innerHTML='';
+  _seguros.forEach(function(s,i){
+    var d=document.createElement('div');
+    d.style.cssText='display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;margin-bottom:8px;align-items:center;';
+    d.innerHTML=
+      '<div><label class="flbl">Desde</label><input type="date" class="finput" value="'+s.inicio+'" onchange="_seguros['+i+'].inicio=this.value"></div>'+
+      '<div><label class="flbl">Hasta</label><input type="date" class="finput" value="'+s.fin+'" onchange="_seguros['+i+'].fin=this.value"></div>'+
+      '<div><label class="flbl">Monto USD</label><input type="number" class="finput" value="'+s.monto+'" onchange="_seguros['+i+'].monto=parseFloat(this.value)"></div>'+
+      '<button onclick="_seguros.splice('+i+',1);renderSeguros(_seguros);" style="padding:6px 10px;border:1px solid var(--border);border-radius:var(--r);cursor:pointer;background:none;color:var(--red);margin-top:14px;">✕</button>';
+    el.appendChild(d);
+  });
+}
+function agregarSeguro(){_seguros.push({inicio:'',fin:'',monto:0});renderSeguros(_seguros);}
+
+function guardarVehiculo(){
+  var v={
+    id: VEH_EDIT_IDX!==null?DB.vehiculos[VEH_EDIT_IDX].id:Date.now(),
+    cliente_id:parseInt($('v-cliente').value),
+    placa:$('v-placa').value.trim().toUpperCase(),
+    desc:$('v-desc').value.trim(),
+    tarifa_dia:parseFloat($('v-tarifa-dia').value)||270,
+    tarifa_km:parseFloat($('v-tarifa-km').value)||1.35,
+    limite:parseInt($('v-limite').value)||200,
+    cuota:parseFloat($('v-cuota').value)||0,
+    tc:parseFloat($('v-tc').value)||3.50,
+    contratista:$('v-contratista').value,
+    seguros:_seguros
+  };
+  if(!v.placa){alert('Ingresa la placa');return;}
+  if(VEH_EDIT_IDX!==null){DB.vehiculos[VEH_EDIT_IDX]=v;}
+  else{DB.vehiculos.push(v);}
+  guardarDatos();
+  cerrarModal('modal-vehiculo');
+  renderVehiculos();renderDashboard();
+}
+
+// ── PERMISOS ───────────────────────────────────────────────────────────
+function renderPermisosChips(){
+  var el=$('cliente-perm-chips');el.innerHTML='';
+  DB.clientes.forEach(function(c,i){
+    var btn=document.createElement('button');
+    btn.style.cssText='padding:8px 16px;border-radius:99px;font-size:14px;font-weight:500;cursor:pointer;border:1.5px solid var(--border);color:var(--text2);background:white;';
+    btn.textContent=c.nombre;
+    btn.onclick=function(){
+      PERM_CLIENTE_IDX=i;
+      document.querySelectorAll('#cliente-perm-chips button').forEach(function(b,j){
+        b.style.background=j===i?'var(--navy)':'white';
+        b.style.color=j===i?'var(--gold-pale)':'var(--text2)';
+        b.style.borderColor=j===i?'var(--gold)':'var(--border)';
+      });
+      renderPermisosForm(i);
+    };
+    el.appendChild(btn);
+  });
+}
+
+function renderPermisosForm(idx){
+  var c=DB.clientes[idx];
+  $('permisos-cliente-title').innerHTML='<i class="ti ti-shield-check"></i> Permisos — '+c.nombre;
+  var body=$('permisos-body');body.innerHTML='';
+  $('permisos-card').style.display='block';
+  var grupos={};
+  PERMISOS_LABELS.forEach(function(p){
+    if(!grupos[p.group]) grupos[p.group]=[];
+    grupos[p.group].push(p);
+  });
+  Object.keys(grupos).forEach(function(g){
+    var gDiv=document.createElement('div');gDiv.className='perm-group';
+    gDiv.innerHTML='<div class="perm-group-title">'+g+'</div>';
+    grupos[g].forEach(function(p){
+      var row=document.createElement('div');row.className='perm-row';
+      var checked=c.permisos&&c.permisos[p.key]?'checked':'';
+      row.innerHTML=
+        '<div><div class="perm-label">'+p.label+'</div>'+(p.sub?'<div class="perm-sub">'+p.sub+'</div>':'')+'</div>'+
+        '<label class="toggle"><input type="checkbox" id="perm-'+p.key+'" '+checked+'><span class="toggle-slider"></span></label>';
+      gDiv.appendChild(row);
+    });
+    body.appendChild(gDiv);
+  });
+}
+
+function guardarPermisos(){
+  if(PERM_CLIENTE_IDX===null) return;
+  if(!DB.clientes[PERM_CLIENTE_IDX].permisos) DB.clientes[PERM_CLIENTE_IDX].permisos={};
+  PERMISOS_LABELS.forEach(function(p){
+    var el=$('perm-'+p.key);
+    if(el) DB.clientes[PERM_CLIENTE_IDX].permisos[p.key]=el.checked;
+  });
+  guardarDatos();
+  alert('Permisos guardados correctamente.');
+}
+
+// ── CONFIG JSON ────────────────────────────────────────────────────────
+function renderConfigChips(){
+  var el=$('config-chips');el.innerHTML='';
+  DB.clientes.forEach(function(c,i){
+    var btn=document.createElement('button');
+    btn.style.cssText='padding:8px 16px;border-radius:99px;font-size:14px;font-weight:500;cursor:pointer;border:1.5px solid var(--border);color:var(--text2);background:white;';
+    btn.textContent=c.nombre;
+    btn.onclick=function(){
+      CONFIG_CLIENTE_IDX=i;
+      document.querySelectorAll('#config-chips button').forEach(function(b,j){
+        b.style.background=j===i?'var(--navy)':'white';
+        b.style.color=j===i?'var(--gold-pale)':'var(--text2)';
+        b.style.borderColor=j===i?'var(--gold)':'var(--border)';
+      });
+      mostrarConfigPreview(i);
+    };
+    el.appendChild(btn);
+  });
+}
+
+function generarConfig(idx){
+  var c=DB.clientes[idx];
+  var vehs=DB.vehiculos.filter(function(v){return v.cliente_id===c.id;});
+  return {
+    empresa:{nombre:c.nombre,ruc:c.ruc,color_acento:'#BA7517'},
+    titulares:[{nombre:c.nombre,ruc:'RUC '+c.ruc}],
+    clientes:c.contratistas.map(function(ct){return {nombre:ct,ruc:'RUC —'};}),
+    gps:{empresa:c.gps.empresa,usuario:c.gps.usuario},
+    vehiculos:vehs.map(function(v){
+      return {
+        placa:v.placa,descripcion:v.desc,
+        tarifa_dia:v.tarifa_dia,tarifa_km:v.tarifa_km,
+        limite_km:v.limite,col_odo:8,
+        cuota_usd:v.cuota,tc:v.tc,
+        file_id_recorrido:'GOOGLE_DRIVE_FILE_ID',
+        file_id_mantos:'GOOGLE_DRIVE_FILE_ID',
+        seguros:v.seguros.map(function(s){return {inicio:s.inicio,fin:s.fin,monto_usd:s.monto};}),
+        asignado:v.contratista||''
+      };
+    }),
+    cuentas:{bcp_numero:c.cuentas.bcp,bcp_cci:c.cuentas.cci,bn_detraccion:c.cuentas.bn},
+    igv:0.18,detraccion:0.10,
+    contrato_hasta:c.contrato,
+    permisos:c.permisos||PERMISOS_DEF,
+    alertas:[]
+  };
+}
+
+function mostrarConfigPreview(idx){
+  var cfg=generarConfig(idx);
+  $('config-preview').textContent=JSON.stringify(cfg,null,2);
+  $('config-preview-wrap').style.display='block';
+}
+
+function descargarConfig(){
+  if(CONFIG_CLIENTE_IDX===null) return;
+  var cfg=generarConfig(CONFIG_CLIENTE_IDX);
+  var blob=new Blob([JSON.stringify(cfg,null,2)],{type:'application/json'});
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='config.json';
+  a.click();
+}
+
+function copiarConfig(){
+  if(CONFIG_CLIENTE_IDX===null) return;
+  var cfg=generarConfig(CONFIG_CLIENTE_IDX);
+  navigator.clipboard.writeText(JSON.stringify(cfg,null,2)).then(function(){
+    alert('Config copiado al portapapeles');
+  });
+}
+
+// ── UTILS ──────────────────────────────────────────────────────────────
+function cerrarModal(id){$(id).classList.remove('open');}
+function formatFecha(f){
+  if(!f) return '—';
+  var d=new Date(f+'T00:00:00');
+  return d.toLocaleDateString('es-PE',{day:'numeric',month:'short',year:'numeric'});
+}
+
+// Cerrar modal al hacer clic fuera
+document.addEventListener('click',function(e){
+  ['modal-cliente','modal-vehiculo'].forEach(function(id){
+    var m=$(id);
+    if(m&&e.target===m) cerrarModal(id);
+  });
+});
+</script>
+</body>
+</html>
