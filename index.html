@@ -250,6 +250,16 @@ select.finput{background:white;}
 
       <div class="card">
         <div class="card-header">
+          <div class="card-title"><i class="ti ti-shield-check"></i> Estado SOAT / Revisión técnica (JSON.pe)</div>
+          <button class="btn-secondary" onclick="revisarEstadoJsonpe()"><i class="ti ti-refresh"></i> Revisar ahora</button>
+        </div>
+        <div class="card-body">
+          <div id="jsonpe-status" style="font-size:13px;color:var(--text2);">Click en "Revisar ahora" para consultar el estado de todas las placas (créditos agotados, token vencido, etc. — esto NO lo ven tus clientes, solo tú acá).</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
           <div class="card-title"><i class="ti ti-users"></i> Clientes recientes</div>
           <button class="btn-secondary" onclick="showPage('clientes')">Ver todos</button>
         </div>
@@ -489,6 +499,7 @@ select.finput{background:white;}
       </div>
       <div class="form-field"><label class="flbl">Proyecto / Obra</label><input type="text" class="finput" id="v-proyecto" placeholder="Mina Antamina"></div>
       <div class="form-field"><label class="flbl">Ubicación</label><input type="text" class="finput" id="v-ubicacion" placeholder="Áncash"></div>
+      <div class="form-field"><label class="flbl">Año del vehículo</label><input type="number" class="finput" id="v-anio" placeholder="2024" min="1990" max="2030"></div>
       <div class="form-field full"><label class="flbl">Condiciones de trabajo</label><input type="text" class="finput" id="v-condiciones" placeholder="24/7 con chofer"></div>
     </div>
     <div class="form-section">Seguros</div>
@@ -731,6 +742,58 @@ function renderDashboard(){
       '<td>'+(c.contrato?formatFecha(c.contrato):'—')+'</td>'+
       '<td><span class="badge '+c.estado+'">'+c.estado+'</span></td>';
     tbody.appendChild(tr);
+  });
+}
+
+// ── ESTADO JSON.pe (SOAT / Revisión técnica) ────────────────────────────
+// Revisa, para cada placa de cada cliente, si su datos_soat_{PLACA}.json
+// (publicado por updater.py) tiene algun error (creditos agotados, token
+// vencido, etc). El cliente NUNCA ve este detalle en su dashboard — solo
+// aparece aca, para que Amaro sepa si hay que recargar creditos o revisar
+// el token, sin que el cliente se confunda con un mensaje tecnico ajeno.
+function revisarEstadoJsonpe(){
+  var el=$('jsonpe-status');
+  el.textContent='⏳ Revisando...';
+  var pendientes=[];
+  DB.clientes.forEach(function(c){
+    DB.vehiculos.filter(function(v){return v.cliente_id===c.id;}).forEach(function(v){
+      pendientes.push({cliente:c.nombre, sub:c.sub, placa:v.placa});
+    });
+  });
+  if(pendientes.length===0){el.textContent='No hay vehículos registrados todavía.';return;}
+
+  var promesas=pendientes.map(function(p){
+    var slug=p.placa.replace('-','');
+    var url='https://raw.githubusercontent.com/amaronovoaflores/dashboard-'+p.sub+'/main/datos_soat_'+slug+'.json?t='+Date.now();
+    return fetch(url).then(function(r){return r.ok?r.json():null;}).then(function(d){
+      return {cliente:p.cliente,placa:p.placa,data:d};
+    }).catch(function(){return {cliente:p.cliente,placa:p.placa,data:null};});
+  });
+
+  Promise.all(promesas).then(function(resultados){
+    var ok=0, errores=[], sinArchivo=[];
+    resultados.forEach(function(r){
+      if(!r.data){sinArchivo.push(r);return;}
+      var probs=[];
+      if(r.data.soat&&r.data.soat.ok===false) probs.push('SOAT: '+r.data.soat.error);
+      if(r.data.revision_tecnica&&r.data.revision_tecnica.ok===false&&!r.data.revision_tecnica.exonerado) probs.push('Rev. técnica: '+r.data.revision_tecnica.error);
+      if(probs.length) errores.push({cliente:r.cliente,placa:r.placa,detalle:probs.join(' · ')});
+      else ok++;
+    });
+    var html='<div style="display:flex;gap:16px;margin-bottom:10px;font-size:13px;">'+
+      '<span style="color:var(--teal-mid);">✓ '+ok+' OK</span>'+
+      '<span style="color:var(--red);">⚠ '+errores.length+' con error</span>'+
+      '<span style="color:var(--text2);">— '+sinArchivo.length+' sin archivo aún</span>'+
+    '</div>';
+    if(errores.length>0){
+      html+='<div style="max-height:220px;overflow-y:auto;border-top:1px solid var(--border);">';
+      errores.forEach(function(e){
+        html+='<div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:12px;">'+
+          '<strong>'+e.placa+'</strong> ('+e.cliente+') — '+e.detalle+'</div>';
+      });
+      html+='</div>';
+    }
+    el.innerHTML=html;
   });
 }
 
@@ -993,6 +1056,7 @@ function abrirFormVehiculo(idx){
   $('v-tc').value=v.tc||3.50;
   $('v-proyecto').value=v.proyecto||'';
   $('v-ubicacion').value=v.ubicacion||'';
+  $('v-anio').value=v.anio_vehiculo||'';
   $('v-condiciones').value=v.condiciones||'';
 
   // Poblar contratistas del cliente
@@ -1053,6 +1117,7 @@ function guardarVehiculo(){
     contratista:$('v-contratista').value,
     proyecto:$('v-proyecto').value.trim(),
     ubicacion:$('v-ubicacion').value.trim(),
+    anio_vehiculo:$('v-anio').value?parseInt($('v-anio').value):null,
     condiciones:$('v-condiciones').value.trim(),
     seguros:_seguros
   };
@@ -1305,6 +1370,7 @@ function generarConfig(idx){
         asignado:v.contratista||'',
         proyecto:v.proyecto||'',
         ubicacion:v.ubicacion||'',
+        anio_vehiculo:v.anio_vehiculo||null,
         condiciones:v.condiciones||''
       };
     }),
