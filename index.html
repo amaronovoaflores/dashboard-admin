@@ -543,8 +543,9 @@ select.finput{background:white;}
     <div id="imp-paso-3" style="display:none;">
       <div class="form-section">3. Confirmar importación</div>
       <div id="imp-resumen" style="margin-bottom:.75rem;font-size:13px;color:var(--text2);"></div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:.5rem;">Por defecto: si la placa ya existe para este cliente, se actualiza solo con los datos de este Excel (sus seguros y demás datos no se tocan); si no existe, se agrega.</div>
       <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:1rem;">
-        <input type="checkbox" id="imp-reemplazar"> Reemplazar vehículos existentes de este cliente (en vez de agregar)
+        <input type="checkbox" id="imp-reemplazar"> Reemplazar TODOS los vehículos de este cliente (borra los que no vengan en este Excel)
       </label>
       <div style="overflow-x:auto;max-height:280px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--r);">
         <table style="width:100%;border-collapse:collapse;font-size:12px;">
@@ -1122,6 +1123,26 @@ function guardarVehiculo(){
     seguros:_seguros
   };
   if(!v.placa){alert('Ingresa la placa');return;}
+
+  if(VEH_EDIT_IDX===null){
+    // Alta nueva: verificar que no exista ya esa placa para el mismo cliente
+    var dupIdx=DB.vehiculos.findIndex(function(ex){return ex.cliente_id===v.cliente_id&&ex.placa===v.placa;});
+    if(dupIdx>=0){
+      if(!confirm('Ya existe la placa '+v.placa+' para este cliente. ¿Actualizar ese vehículo en vez de crear uno duplicado?')) return;
+      v.id=DB.vehiculos[dupIdx].id;
+      DB.vehiculos[dupIdx]=v;
+      guardarDatos();cerrarModal('modal-vehiculo');renderVehiculos();renderDashboard();
+      return;
+    }
+  } else {
+    // Edición: si la placa cambió a una que ya usa OTRO vehículo del mismo cliente, avisar y no guardar
+    var dupOtro=DB.vehiculos.findIndex(function(ex,idx){return idx!==VEH_EDIT_IDX&&ex.cliente_id===v.cliente_id&&ex.placa===v.placa;});
+    if(dupOtro>=0){
+      alert('Ya existe otro vehículo con la placa '+v.placa+' para este cliente. Cambia la placa o edita ese otro vehículo en vez de este.');
+      return;
+    }
+  }
+
   if(VEH_EDIT_IDX!==null){DB.vehiculos[VEH_EDIT_IDX]=v;}
   else{DB.vehiculos.push(v);}
   guardarDatos();
@@ -1141,8 +1162,10 @@ var IMP_CAMPOS=[
   {key:'tc',label:'Tipo de cambio',aliases:['tc','tipo de cambio','tipo cambio']},
   {key:'proyecto',label:'Proyecto / Obra',aliases:['proyecto','obra','sitio','frente']},
   {key:'ubicacion',label:'Ubicación',aliases:['ubicacion','region','departamento','ciudad','zona']},
+  {key:'anio_vehiculo',label:'Año del vehículo',aliases:['anio','anio vehiculo','ano','modelo anio','year']},
   {key:'condiciones',label:'Condiciones de trabajo',aliases:['condiciones','condicion','observaciones','notas']}
 ];
+var DEFAULTS_VEHICULO={desc:'',contratista:'',tarifa_dia:270,tarifa_km:1.35,limite:200,cuota:0,tc:3.50,proyecto:'',ubicacion:'',anio_vehiculo:null,condiciones:''};
 var _impHeaders=[], _impDataRows=[], _impMapeo={}, _impParsed=[];
 
 function normalizarTexto(s){
@@ -1205,52 +1228,74 @@ function previewImportacion(){
   if(_impMapeo.placa===undefined||_impMapeo.placa<0){alert('Selecciona qué columna es la Placa — es obligatoria.');return;}
   function val(row,campoKey){
     var idx=_impMapeo[campoKey];
-    if(idx===undefined||idx<0) return null;
+    if(idx===undefined||idx<0) return undefined; // no mapeado: no se toca al fusionar
     var v=row[idx];
-    return v===undefined||v===null?null:v;
+    if(v===undefined||v===null||String(v).trim()==='') return undefined;
+    return v;
   }
-  function num(v,def){
-    if(v===null||v==='') return def;
+  function num(v){
+    if(v===undefined) return undefined;
     var n=parseFloat(String(v).replace(',','.'));
-    return isNaN(n)?def:n;
+    return isNaN(n)?undefined:n;
   }
-  _impParsed=[];
+  function str(v){ return v===undefined?undefined:String(v).trim(); }
+
+  var cId=parseInt($('imp-cliente').value);
+  var porPlaca={}; // dedupe dentro del propio Excel: ultima fila con esa placa gana
+  var duplicadosEnArchivo=0;
   _impDataRows.forEach(function(row){
     var placa=val(row,'placa');
-    if(!placa||!String(placa).trim()) return; // fila sin placa: se ignora
-    _impParsed.push({
-      placa:String(placa).trim().toUpperCase(),
-      desc:String(val(row,'desc')||'').trim(),
-      contratista:String(val(row,'contratista')||'').trim(),
-      tarifa_dia:num(val(row,'tarifa_dia'),270),
-      tarifa_km:num(val(row,'tarifa_km'),1.35),
-      limite:Math.round(num(val(row,'limite'),200)),
-      cuota:num(val(row,'cuota'),0),
-      tc:num(val(row,'tc'),3.50),
-      proyecto:String(val(row,'proyecto')||'').trim(),
-      ubicacion:String(val(row,'ubicacion')||'').trim(),
-      condiciones:String(val(row,'condiciones')||'').trim(),
-      seguros:[]
-    });
+    if(!placa) return; // fila sin placa: se ignora
+    placa=String(placa).trim().toUpperCase();
+    var obj={placa:placa};
+    var desc=str(val(row,'desc')); if(desc!==undefined) obj.desc=desc;
+    var contratista=str(val(row,'contratista')); if(contratista!==undefined) obj.contratista=contratista;
+    var td=num(val(row,'tarifa_dia')); if(td!==undefined) obj.tarifa_dia=td;
+    var tk=num(val(row,'tarifa_km')); if(tk!==undefined) obj.tarifa_km=tk;
+    var lim=num(val(row,'limite')); if(lim!==undefined) obj.limite=Math.round(lim);
+    var cu=num(val(row,'cuota')); if(cu!==undefined) obj.cuota=cu;
+    var tc=num(val(row,'tc')); if(tc!==undefined) obj.tc=tc;
+    var pr=str(val(row,'proyecto')); if(pr!==undefined) obj.proyecto=pr;
+    var ub=str(val(row,'ubicacion')); if(ub!==undefined) obj.ubicacion=ub;
+    var an=num(val(row,'anio_vehiculo')); if(an!==undefined) obj.anio_vehiculo=an;
+    var co=str(val(row,'condiciones')); if(co!==undefined) obj.condiciones=co;
+    if(porPlaca[placa]) duplicadosEnArchivo++;
+    porPlaca[placa]=obj; // si se repite la placa en el mismo Excel, la ultima fila gana
   });
+
+  _impParsed=Object.keys(porPlaca).map(function(p){return porPlaca[p];});
   if(_impParsed.length===0){alert('No se encontraron filas válidas con placa.');return;}
 
-  var cliNombre=DB.clientes.find(function(c){return c.id===parseInt($('imp-cliente').value);}).nombre;
-  $('imp-resumen').textContent='Se importarán '+_impParsed.length+' vehículo(s) para '+cliNombre+'.';
+  // Marcar cuales son nuevos vs actualizacion de un vehiculo ya existente
+  _impParsed.forEach(function(v){
+    v._existente=DB.vehiculos.some(function(ex){return ex.cliente_id===cId&&ex.placa===v.placa;});
+  });
+
+  var cliNombre=DB.clientes.find(function(c){return c.id===cId;}).nombre;
+  var nNuevos=_impParsed.filter(function(v){return !v._existente;}).length;
+  var nActualiza=_impParsed.length-nNuevos;
+  var resumen='Para '+cliNombre+': '+nNuevos+' vehículo(s) nuevo(s), '+nActualiza+' se actualizarán (ya existían por placa).';
+  if(duplicadosEnArchivo>0) resumen+=' Se encontraron '+duplicadosEnArchivo+' fila(s) con placa repetida en el archivo — se usó la última de cada una.';
+  $('imp-resumen').textContent=resumen;
 
   var cols=[['placa','Placa'],['desc','Descripción'],['contratista','Contratista'],['tarifa_dia','Tarifa/día'],['proyecto','Proyecto'],['ubicacion','Ubicación']];
   var head=$('imp-preview-head');head.innerHTML='';
+  var thEstado=document.createElement('th');thEstado.style.cssText='padding:8px 10px;text-align:left;font-weight:600;';thEstado.textContent='Estado';head.appendChild(thEstado);
   cols.forEach(function(c){var th=document.createElement('th');th.style.cssText='padding:8px 10px;text-align:left;font-weight:600;';th.textContent=c[1];head.appendChild(th);});
   var body=$('imp-preview-body');body.innerHTML='';
   _impParsed.forEach(function(v){
     var tr=document.createElement('tr');
     tr.style.borderTop='1px solid var(--border)';
+    var tdEstado=document.createElement('td');
+    tdEstado.style.cssText='padding:7px 10px;font-size:11px;';
+    tdEstado.innerHTML=v._existente?'<span style="color:var(--gold);">↻ Actualiza</span>':'<span style="color:var(--teal-mid);">+ Nuevo</span>';
+    tr.appendChild(tdEstado);
     cols.forEach(function(c){
       var td=document.createElement('td');
       td.style.cssText='padding:7px 10px;';
       var value=v[c[0]];
-      td.textContent=(value===''||value===undefined)?'—':value;
-      if(value==='') td.style.color='var(--text2)';
+      td.textContent=(value===undefined||value==='')?'—':value;
+      if(value===undefined||value==='') td.style.color='var(--text2)';
       tr.appendChild(td);
     });
     body.appendChild(tr);
@@ -1262,16 +1307,32 @@ function previewImportacion(){
 
 function confirmarImportacion(){
   var cId=parseInt($('imp-cliente').value);
-  if($('imp-reemplazar').checked){
+  var reemplazarTodo=$('imp-reemplazar').checked;
+  var nuevos=0, actualizados=0;
+
+  if(reemplazarTodo){
     DB.vehiculos=DB.vehiculos.filter(function(v){return v.cliente_id!==cId;});
   }
+
   _impParsed.forEach(function(v,i){
-    DB.vehiculos.push(Object.assign({id:Date.now()+i,cliente_id:cId},v));
+    var existente=reemplazarTodo?null:DB.vehiculos.find(function(ex){return ex.cliente_id===cId&&ex.placa===v.placa;});
+    if(existente){
+      // Fusion por placa: solo se pisan los campos que vinieron mapeados en el
+      // Excel (v ya no trae claves sin mapear). Seguros y todo lo demas del
+      // vehiculo existente quedan intactos.
+      Object.keys(v).forEach(function(k){ if(k!=='placa'&&k!=='_existente') existente[k]=v[k]; });
+      actualizados++;
+    } else {
+      delete v._existente;
+      var completo=Object.assign({},DEFAULTS_VEHICULO,v,{id:Date.now()+i,cliente_id:cId,seguros:[]});
+      DB.vehiculos.push(completo);
+      nuevos++;
+    }
   });
   guardarDatos();
   cerrarModal('modal-importar');
   renderVehiculos();renderDashboard();
-  alert('✓ '+_impParsed.length+' vehículo(s) importado(s) correctamente.');
+  alert('✓ Importación completa: '+nuevos+' nuevo(s), '+actualizados+' actualizado(s).');
 }
 
 // ── PERMISOS ───────────────────────────────────────────────────────────
