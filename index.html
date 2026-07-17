@@ -275,6 +275,7 @@ select.finput{background:white;}
           <i class="ti ti-plus"></i> Nuevo cliente
         </button>
       </div>
+      <div id="onboard-status" style="display:none;padding:10px 14px;border-radius:var(--r);font-size:13px;margin-bottom:1rem;"></div>
       <div class="card">
         <div class="card-body" style="padding:0;">
           <table class="tbl">
@@ -750,6 +751,7 @@ function renderClientes(){
       '<td>'+(c.contrato?formatFecha(c.contrato):'—')+'</td>'+
       '<td><span class="badge '+c.estado+'">'+c.estado+'</span></td>'+
       '<td><div class="actions-cell">'+
+        '<button class="btn-secondary" onclick="crearRepoCliente('+c.id+')" title="Crea o verifica el repo dashboard-'+c.sub+' en GitHub con loader, CNAME, updater y Pages en modo legacy"><i class="ti ti-brand-github"></i> Crear repo</button>'+
         '<button class="btn-secondary" onclick="editarCliente('+i+')"><i class="ti ti-edit"></i> Editar</button>'+
         '<button class="btn-danger" onclick="eliminarCliente('+i+')"><i class="ti ti-trash"></i></button>'+
       '</div></td>';
@@ -783,6 +785,106 @@ function eliminarCliente(i){
   if(!confirm('¿Eliminar cliente '+DB.clientes[i].nombre+'?')) return;
   DB.clientes.splice(i,1);
   guardarDatos();renderClientes();renderDashboard();
+}
+
+// ── ONBOARDING: crear repo del cliente en GitHub ────────────────────────
+var GH_TEMPLATE_OWNER='amaronovoaflores';
+var GH_TEMPLATE_REPO='dashboard-pedro'; // repo de referencia: loader/updater/workflow estandar
+
+function b64Utf8(str){
+  return btoa(unescape(encodeURIComponent(str)));
+}
+
+function ghApi(token,method,path,body){
+  return fetch('https://api.github.com'+path,{
+    method:method,
+    headers:{'Authorization':'token '+token,'Accept':'application/vnd.github+json','Content-Type':'application/json'},
+    body:body!==undefined?JSON.stringify(body):undefined
+  }).then(function(r){
+    return r.text().then(function(txt){
+      var data=null; try{data=txt?JSON.parse(txt):null;}catch(e){}
+      if(!r.ok && r.status!==404) throw new Error((data&&data.message)||('HTTP '+r.status));
+      return {ok:r.ok,status:r.status,data:data};
+    });
+  });
+}
+
+function putFile(token,owner,repo,path,content,message){
+  return ghApi(token,'GET','/repos/'+owner+'/'+repo+'/contents/'+path).then(function(res){
+    var body={message:message,content:b64Utf8(content),branch:'main'};
+    if(res.ok && res.data && res.data.sha) body.sha=res.data.sha;
+    return ghApi(token,'PUT','/repos/'+owner+'/'+repo+'/contents/'+path,body);
+  });
+}
+
+function crearRepoCliente(clienteId){
+  var c=DB.clientes.find(function(x){return x.id===clienteId;});
+  if(!c){alert('Cliente no encontrado');return;}
+  if(!c.sub){alert('El cliente no tiene subdominio configurado — edítalo primero.');return;}
+  var token=localStorage.getItem('gh_token')||'';
+  if(!token){alert('Ingresa tu GitHub Token primero (pestaña Config JSON).');return;}
+  if(!confirm('¿Crear o verificar el repo dashboard-'+c.sub+' en GitHub?\n\nSube: loader (index.html), CNAME, .nojekyll, updater.py y el workflow nocturno, y deja GitHub Pages en modo legacy.\n\nEsto NO borra vehículos ni config.json existentes en ese repo.\n\nNota: si tu token no tiene el permiso "workflow", la subida del archivo .yml fallará (los demás archivos sí quedarán bien).'))
+    return;
+
+  var owner='amaronovoaflores';
+  var repo='dashboard-'+c.sub;
+  var statusEl=$('onboard-status');
+  statusEl.style.display='block';
+  statusEl.style.background='var(--gold-light)';statusEl.style.color='var(--gold)';statusEl.style.border='1px solid var(--gold-pale)';
+  statusEl.textContent='⏳ Verificando/creando repo '+repo+'...';
+
+  ghApi(token,'GET','/repos/'+owner+'/'+repo)
+  .then(function(res){
+    if(res.ok) return res;
+    return ghApi(token,'POST','/user/repos',{name:repo,description:'Dashboard flota — '+c.nombre,private:false,auto_init:true});
+  })
+  .then(function(){
+    statusEl.textContent='⏳ Obteniendo archivos base desde '+GH_TEMPLATE_REPO+'...';
+    return Promise.all([
+      fetch('https://raw.githubusercontent.com/'+GH_TEMPLATE_OWNER+'/'+GH_TEMPLATE_REPO+'/main/index.html').then(function(r){return r.text();}),
+      fetch('https://raw.githubusercontent.com/'+GH_TEMPLATE_OWNER+'/'+GH_TEMPLATE_REPO+'/main/updater.py').then(function(r){return r.text();}),
+      fetch('https://raw.githubusercontent.com/'+GH_TEMPLATE_OWNER+'/'+GH_TEMPLATE_REPO+'/main/.github/workflows/update_hunter.yml').then(function(r){return r.text();})
+    ]);
+  })
+  .then(function(templates){
+    var loaderHtml=templates[0], updaterPy=templates[1], workflowYml=templates[2];
+    statusEl.textContent='⏳ Subiendo index.html, CNAME, .nojekyll, updater.py...';
+    return Promise.all([
+      putFile(token,owner,repo,'index.html',loaderHtml,'Onboarding: loader estandar'),
+      putFile(token,owner,repo,'CNAME',c.sub+'.dash.net.pe','Onboarding: CNAME'),
+      putFile(token,owner,repo,'.nojekyll','','Onboarding: nojekyll'),
+      putFile(token,owner,repo,'updater.py',updaterPy,'Onboarding: updater generico')
+    ]).then(function(){
+      statusEl.textContent='⏳ Subiendo workflow nocturno...';
+      return putFile(token,owner,repo,'.github/workflows/update_hunter.yml',workflowYml,'Onboarding: workflow nocturno')
+        .catch(function(err){
+          throw new Error('WORKFLOW_FAIL: '+err.message);
+        });
+    });
+  })
+  .then(function(){
+    statusEl.textContent='⏳ Configurando GitHub Pages (modo legacy)...';
+    var pagesBody={build_type:'legacy',source:{branch:'main',path:'/'}};
+    // POST activa Pages por primera vez (repo nuevo); si ya estaba activado
+    // devuelve error y usamos PUT para actualizar la config existente.
+    return ghApi(token,'POST','/repos/'+owner+'/'+repo+'/pages',pagesBody)
+      .catch(function(){return ghApi(token,'PUT','/repos/'+owner+'/'+repo+'/pages',pagesBody);});
+  })
+  .then(function(){
+    statusEl.style.background='var(--teal)';statusEl.style.color='var(--teal-mid)';statusEl.style.border='1px solid #5DCAA5';
+    statusEl.textContent='✓ Repo '+repo+' listo. Falta: 1) publicar config.json (pestaña Config JSON → Publicar en GitHub), '+
+      '2) agregar los secrets HUNTER_USER, HUNTER_PASS y GAPI_KEY en github.com/'+owner+'/'+repo+' → Settings → Secrets and variables → Actions.';
+  })
+  .catch(function(err){
+    var esWorkflow=err.message.indexOf('WORKFLOW_FAIL')===0;
+    statusEl.style.background='var(--red-light)';statusEl.style.color='var(--red)';statusEl.style.border='1px solid #F0A0A0';
+    if(esWorkflow){
+      statusEl.textContent='⚠ Repo, loader, CNAME y updater.py quedaron bien, pero el workflow (.github/workflows/update_hunter.yml) no se pudo subir — tu token no tiene el permiso "workflow". '+
+        'Sube ese archivo manualmente en GitHub, o regenera el token agregando ese scope. Contenido disponible en dashboard-pedro/.github/workflows/update_hunter.yml.';
+    } else {
+      statusEl.textContent='✗ Error: '+err.message;
+    }
+  });
 }
 
 function updateSubPreview(){
