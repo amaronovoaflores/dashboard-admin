@@ -603,6 +603,12 @@ var PERMISOS_LABELS=[
 function $(id){return document.getElementById(id);}
 
 document.addEventListener('DOMContentLoaded',function(){
+  // Limpieza: versiones anteriores de este panel guardaban el token de
+  // GitHub directo en este navegador (localStorage 'gh_token'). Ya no se
+  // usa — todas las escrituras pasan por el Worker (ver publicarConfig,
+  // crearRepoCliente). Se borra automático por si quedó de una sesión vieja.
+  localStorage.removeItem('gh_token');
+
   // Verificar sesión guardada
   if(localStorage.getItem('admin_session')==='ok'){
     mostrarAdmin();
