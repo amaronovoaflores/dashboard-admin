@@ -348,26 +348,6 @@ select.finput{background:white;}
         </div>
       </div>
 
-      <!-- GitHub Token -->
-      <div class="card" style="margin-bottom:1rem;">
-        <div class="card-header">
-          <div class="card-title"><i class="ti ti-key"></i> GitHub Token</div>
-        </div>
-        <div class="card-body">
-          <div class="form-grid">
-            <div class="form-field full">
-              <label class="flbl">Token de acceso (ghp_...)</label>
-              <input type="password" class="finput" id="github-token" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
-                oninput="localStorage.setItem('gh_token',this.value)"
-                style="font-family:monospace;">
-            </div>
-          </div>
-          <div style="font-size:12px;color:var(--text2);margin-top:4px;">
-            El token se guarda solo en este navegador. Necesita permiso <strong>repo</strong>.
-          </div>
-        </div>
-      </div>
-
       <div class="card">
         <div class="card-header">
           <div class="card-title"><i class="ti ti-code"></i> Selecciona cliente</div>
@@ -565,7 +545,17 @@ select.finput{background:white;}
 <script>
 // ── DATOS ──────────────────────────────────────────────────────────────
 var ADMIN_USER='admin';
-var ADMIN_PASS='flotas2026'; // cambiar después de primer login
+// Esta clave es la misma que valida el Worker server-side (secret ADMIN_KEY
+// en flotas-worker) antes de tocar GitHub — es la verificación REAL. Que
+// también esté visible acá (repo público) ya no importa para la seguridad
+// de las escrituras: sin esta clave exacta, el Worker rechaza todo. Rotarla
+// acá y en el Worker (`wrangler secret put ADMIN_KEY`) si hace falta.
+var ADMIN_PASS='PntWfFEvKMFpxo5hfpTBU-QZybNm1Cbr';
+
+// Worker que hace de proxy autenticado hacia GitHub (crear repo, publicar
+// config.json) y guarda el respaldo de Tareo/Valorización de los clientes.
+var FLOTAS_WORKER='https://dash-flotas-datos.amaronovoaflores.workers.dev';
+function adminKey(){ return localStorage.getItem('admin_key')||''; }
 
 var DB={clientes:[],vehiculos:[]};
 var CLIENTE_EDIT_IDX=null;
@@ -656,6 +646,7 @@ function tryLogin(){
   var p=$('login-pass').value.trim();
   if(u===ADMIN_USER&&p===ADMIN_PASS){
     localStorage.setItem('admin_session','ok');
+    localStorage.setItem('admin_key',p);
     mostrarAdmin();
   } else {
     $('login-err').style.display='block';
@@ -665,6 +656,7 @@ function tryLogin(){
 
 function logout(){
   localStorage.removeItem('admin_session');
+  localStorage.removeItem('admin_key');
   location.reload();
 }
 
@@ -718,7 +710,7 @@ function showPage(page){
   if(page==='clientes') renderClientes();
   if(page==='vehiculos') renderVehiculos();
   if(page==='permisos') renderPermisosChips();
-  if(page==='config'){renderConfigChips();var t=localStorage.getItem('gh_token');if(t&&$('github-token'))$('github-token').value=t;}
+  if(page==='config'){renderConfigChips();}
   if(page==='dashboard') renderDashboard();
 }
 
@@ -852,145 +844,50 @@ function eliminarCliente(i){
 }
 
 // ── ONBOARDING: crear repo del cliente en GitHub ────────────────────────
-var GH_TEMPLATE_OWNER='amaronovoaflores';
-var GH_TEMPLATE_REPO='dashboard-pedro'; // repo de referencia: loader/updater/workflow estandar
-
-function b64Utf8(str){
-  return btoa(unescape(encodeURIComponent(str)));
-}
-
-function ghApi(token,method,path,body){
-  return fetch('https://api.github.com'+path,{
-    method:method,
-    headers:{'Authorization':'token '+token,'Accept':'application/vnd.github+json','Content-Type':'application/json'},
-    body:body!==undefined?JSON.stringify(body):undefined
-  }).then(function(r){
-    return r.text().then(function(txt){
-      var data=null; try{data=txt?JSON.parse(txt):null;}catch(e){}
-      if(!r.ok && r.status!==404) throw new Error((data&&data.message)||('HTTP '+r.status));
-      return {ok:r.ok,status:r.status,data:data};
-    });
-  });
-}
-
-function putFile(token,owner,repo,path,content,message){
-  return ghApi(token,'GET','/repos/'+owner+'/'+repo+'/contents/'+path).then(function(res){
-    var body={message:message,content:b64Utf8(content),branch:'main'};
-    if(res.ok && res.data && res.data.sha) body.sha=res.data.sha;
-    return ghApi(token,'PUT','/repos/'+owner+'/'+repo+'/contents/'+path,body);
-  });
-}
-
-// Igual que putFile() pero para binarios (iconos PNG) — el contenido ya viene
-// en base64 y NO debe pasar por b64Utf8 (eso corrompería los bytes).
-function putFileBinario(token,owner,repo,path,base64Content,message){
-  return ghApi(token,'GET','/repos/'+owner+'/'+repo+'/contents/'+path).then(function(res){
-    var body={message:message,content:base64Content,branch:'main'};
-    if(res.ok && res.data && res.data.sha) body.sha=res.data.sha;
-    return ghApi(token,'PUT','/repos/'+owner+'/'+repo+'/contents/'+path,body);
-  });
-}
-
-function arrayBufferABase64(buffer){
-  var bytes=new Uint8Array(buffer),binary='';
-  for(var i=0;i<bytes.byteLength;i++) binary+=String.fromCharCode(bytes[i]);
-  return btoa(binary);
-}
-
-// manifest.json de instalación PWA, personalizado por cliente (nombre para
-// la pantalla de inicio del celular). Iconos y colores son genéricos de marca.
-function manifestJSON(c){
-  var nombre=c.nombre||'Dashboard Flotas';
-  return JSON.stringify({
-    name:nombre,
-    short_name:nombre.length>12?nombre.slice(0,12):nombre,
-    start_url:'./',
-    scope:'./',
-    display:'standalone',
-    background_color:'#0d1b2a',
-    theme_color:'#0d1b2a',
-    icons:[
-      {src:'icon-192.png',sizes:'192x192',type:'image/png'},
-      {src:'icon-512.png',sizes:'512x512',type:'image/png'}
-    ]
-  },null,2);
-}
+// El token de GitHub YA NO vive en este navegador — todas las escrituras
+// (crear repo, publicar config.json) pasan por el Worker
+// dash-flotas-datos, que guarda el token como secret server-side y exige
+// el header X-Admin-Key (ver flotas-worker/worker.js). Antes el token con
+// permiso de escritura a TODOS los repos de clientes se guardaba en
+// localStorage de este panel — riesgo real dado que el repo de este panel
+// es público. adminKey() abajo.
 
 function crearRepoCliente(clienteId){
   var c=DB.clientes.find(function(x){return x.id===clienteId;});
   if(!c){alert('Cliente no encontrado');return;}
   if(!c.sub){alert('El cliente no tiene subdominio configurado — edítalo primero.');return;}
-  var token=localStorage.getItem('gh_token')||'';
-  if(!token){alert('Ingresa tu GitHub Token primero (pestaña Config JSON).');return;}
-  if(!confirm('¿Crear o verificar el repo dashboard-'+c.sub+' en GitHub?\n\nSube: loader (index.html), CNAME, .nojekyll, updater.py, workflow nocturno y los archivos de instalación PWA (manifest.json, sw.js, íconos), y deja GitHub Pages en modo legacy.\n\nEsto NO borra vehículos ni config.json existentes en ese repo — es seguro volver a correrlo en un cliente ya creado, por ejemplo solo para agregarle los archivos PWA nuevos.\n\nNota: si tu token no tiene el permiso "workflow", la subida del archivo .yml fallará (los demás archivos sí quedarán bien).'))
+  if(!confirm('¿Crear o verificar el repo dashboard-'+c.sub+' en GitHub?\n\nSube: loader (index.html), CNAME, .nojekyll, updater.py, workflow nocturno y los archivos de instalación PWA (manifest.json, sw.js, íconos), y deja GitHub Pages en modo legacy.\n\nEsto NO borra vehículos ni config.json existentes en ese repo — es seguro volver a correrlo en un cliente ya creado, por ejemplo solo para agregarle los archivos PWA nuevos.'))
     return;
 
-  var owner='amaronovoaflores';
   var repo='dashboard-'+c.sub;
   var statusEl=$('onboard-status');
   statusEl.style.display='block';
   statusEl.style.background='var(--gold-light)';statusEl.style.color='var(--gold)';statusEl.style.border='1px solid var(--gold-pale)';
-  statusEl.textContent='⏳ Verificando/creando repo '+repo+'...';
+  statusEl.textContent='⏳ Creando/actualizando '+repo+' (repo, archivos, workflow, Pages)...';
 
-  ghApi(token,'GET','/repos/'+owner+'/'+repo)
+  fetch(FLOTAS_WORKER+'/api/admin/crear-repo',{
+    method:'POST',
+    headers:{'Content-Type':'application/json','X-Admin-Key':adminKey()},
+    body:JSON.stringify({subdominio:c.sub,nombreCliente:c.nombre})
+  })
+  .then(function(r){return r.json().then(function(d){return {status:r.status,d:d};});})
   .then(function(res){
-    if(res.ok) return res;
-    return ghApi(token,'POST','/user/repos',{name:repo,description:'Dashboard flota — '+c.nombre,private:false,auto_init:true});
-  })
-  .then(function(){
-    statusEl.textContent='⏳ Obteniendo archivos base desde '+GH_TEMPLATE_REPO+'...';
-    return Promise.all([
-      fetch('https://raw.githubusercontent.com/'+GH_TEMPLATE_OWNER+'/'+GH_TEMPLATE_REPO+'/main/index.html').then(function(r){return r.text();}),
-      fetch('https://raw.githubusercontent.com/'+GH_TEMPLATE_OWNER+'/'+GH_TEMPLATE_REPO+'/main/updater.py').then(function(r){return r.text();}),
-      fetch('https://raw.githubusercontent.com/'+GH_TEMPLATE_OWNER+'/'+GH_TEMPLATE_REPO+'/main/.github/workflows/update_hunter.yml').then(function(r){return r.text();}),
-      fetch('https://raw.githubusercontent.com/'+GH_TEMPLATE_OWNER+'/'+GH_TEMPLATE_REPO+'/main/sw.js').then(function(r){return r.text();}),
-      fetch('https://raw.githubusercontent.com/'+GH_TEMPLATE_OWNER+'/'+GH_TEMPLATE_REPO+'/main/icon-192.png').then(function(r){return r.arrayBuffer();}),
-      fetch('https://raw.githubusercontent.com/'+GH_TEMPLATE_OWNER+'/'+GH_TEMPLATE_REPO+'/main/icon-512.png').then(function(r){return r.arrayBuffer();})
-    ]);
-  })
-  .then(function(templates){
-    var loaderHtml=templates[0], updaterPy=templates[1], workflowYml=templates[2], swJs=templates[3];
-    var icon192=arrayBufferABase64(templates[4]), icon512=arrayBufferABase64(templates[5]);
-    statusEl.textContent='⏳ Subiendo index.html, CNAME, .nojekyll, updater.py, PWA (manifest/sw/íconos)...';
-    return Promise.all([
-      putFile(token,owner,repo,'index.html',loaderHtml,'Onboarding: loader estandar'),
-      putFile(token,owner,repo,'CNAME',c.sub+'.dash.net.pe','Onboarding: CNAME'),
-      putFile(token,owner,repo,'.nojekyll','','Onboarding: nojekyll'),
-      putFile(token,owner,repo,'updater.py',updaterPy,'Onboarding: updater generico'),
-      putFile(token,owner,repo,'sw.js',swJs,'Onboarding: service worker PWA'),
-      putFile(token,owner,repo,'manifest.json',manifestJSON(c),'Onboarding: manifest PWA'),
-      putFileBinario(token,owner,repo,'icon-192.png',icon192,'Onboarding: icono PWA 192'),
-      putFileBinario(token,owner,repo,'icon-512.png',icon512,'Onboarding: icono PWA 512')
-    ]).then(function(){
-      statusEl.textContent='⏳ Subiendo workflow nocturno...';
-      return putFile(token,owner,repo,'.github/workflows/update_hunter.yml',workflowYml,'Onboarding: workflow nocturno')
-        .catch(function(err){
-          throw new Error('WORKFLOW_FAIL: '+err.message);
-        });
-    });
-  })
-  .then(function(){
-    statusEl.textContent='⏳ Configurando GitHub Pages (modo legacy)...';
-    var pagesBody={build_type:'legacy',source:{branch:'main',path:'/'}};
-    // POST activa Pages por primera vez (repo nuevo); si ya estaba activado
-    // devuelve error y usamos PUT para actualizar la config existente.
-    return ghApi(token,'POST','/repos/'+owner+'/'+repo+'/pages',pagesBody)
-      .catch(function(){return ghApi(token,'PUT','/repos/'+owner+'/'+repo+'/pages',pagesBody);});
-  })
-  .then(function(){
+    var d=res.d;
+    if(res.status===401){throw new Error('No autorizado — vuelve a iniciar sesión.');}
+    if(!d||!d.ok){throw new Error((d&&d.message)||'Error desconocido');}
+    if(d.archivosFallidos&&d.archivosFallidos.length){
+      statusEl.style.background='var(--red-light)';statusEl.style.color='var(--red)';statusEl.style.border='1px solid #F0A0A0';
+      statusEl.textContent='⚠ Repo creado pero fallaron estos archivos (reintenta el botón): '+d.archivosFallidos.join(', ');
+      return;
+    }
     statusEl.style.background='var(--teal)';statusEl.style.color='var(--teal-mid)';statusEl.style.border='1px solid #5DCAA5';
-    statusEl.textContent='✓ Repo '+repo+' listo. Falta: 1) publicar config.json (pestaña Config JSON → Publicar en GitHub), '+
-      '2) agregar los secrets HUNTER_USER, HUNTER_PASS y GAPI_KEY en github.com/'+owner+'/'+repo+' → Settings → Secrets and variables → Actions.';
+    statusEl.textContent='✓ Repo '+d.repo+' listo'+(d.workflowOk?'':' (workflow nocturno falló, reintenta el botón)')+
+      '. Falta: 1) publicar config.json (pestaña Config JSON → Publicar en GitHub), '+
+      '2) agregar los secrets HUNTER_USER, HUNTER_PASS y GAPI_KEY en github.com/amaronovoaflores/'+d.repo+' → Settings → Secrets and variables → Actions.';
   })
   .catch(function(err){
-    var esWorkflow=err.message.indexOf('WORKFLOW_FAIL')===0;
     statusEl.style.background='var(--red-light)';statusEl.style.color='var(--red)';statusEl.style.border='1px solid #F0A0A0';
-    if(esWorkflow){
-      statusEl.textContent='⚠ Repo, loader, CNAME y updater.py quedaron bien, pero el workflow (.github/workflows/update_hunter.yml) no se pudo subir — tu token no tiene el permiso "workflow". '+
-        'Sube ese archivo manualmente en GitHub, o regenera el token agregando ese scope. Contenido disponible en dashboard-pedro/.github/workflows/update_hunter.yml.';
-    } else {
-      statusEl.textContent='✗ Error: '+err.message;
-    }
+    statusEl.textContent='✗ Error: '+err.message;
   });
 }
 
@@ -1494,43 +1391,29 @@ function mostrarConfigPreview(idx){
 
 function publicarConfig(){
   if(CONFIG_CLIENTE_IDX===null){alert('Selecciona un cliente primero');return;}
-  var token=localStorage.getItem('gh_token')||'';
-  if(!token){alert('Ingresa tu GitHub Token arriba');return;}
   var c=DB.clientes[CONFIG_CLIENTE_IDX];
   var repo='dashboard-'+c.sub;
-  var owner='amaronovoaflores';
   var cfg=generarConfig(CONFIG_CLIENTE_IDX);
-  var contenido=btoa(unescape(encodeURIComponent(JSON.stringify(cfg,null,2))));
   var statusEl=$('publish-status');
   statusEl.style.display='block';
   statusEl.style.background='var(--gold-light)';
   statusEl.style.color='var(--gold)';
   statusEl.style.border='1px solid var(--gold-pale)';
-  statusEl.textContent='⏳ Publicando en '+owner+'/'+repo+'...';
+  statusEl.textContent='⏳ Publicando en '+repo+'...';
 
-  // Primero obtener el SHA del archivo actual (necesario para actualizar)
-  var apiUrl='https://api.github.com/repos/'+owner+'/'+repo+'/contents/config.json';
-  fetch(apiUrl,{headers:{'Authorization':'token '+token,'Accept':'application/vnd.github.v3+json'}})
-  .then(function(r){return r.json();})
-  .then(function(data){
-    var sha=data.sha||null;
-    var body={message:'⚙ Admin: actualizar config.json '+new Date().toLocaleDateString('es-PE'),content:contenido};
-    if(sha) body.sha=sha;
-    return fetch(apiUrl,{
-      method:'PUT',
-      headers:{'Authorization':'token '+token,'Accept':'application/vnd.github.v3+json','Content-Type':'application/json'},
-      body:JSON.stringify(body)
-    });
+  fetch(FLOTAS_WORKER+'/api/admin/publicar-config',{
+    method:'POST',
+    headers:{'Content-Type':'application/json','X-Admin-Key':adminKey()},
+    body:JSON.stringify({subdominio:c.sub,config:cfg})
   })
-  .then(function(r){
-    if(r.ok){
-      statusEl.style.background='var(--teal)';
-      statusEl.style.color='var(--teal-mid)';
-      statusEl.style.border='1px solid #5DCAA5';
-      statusEl.textContent='✓ config.json publicado en '+owner+'/'+repo+' — el dashboard se actualiza en 1-2 minutos';
-    } else {
-      return r.json().then(function(e){throw new Error(e.message);});
-    }
+  .then(function(r){return r.json().then(function(d){return {status:r.status,d:d};});})
+  .then(function(res){
+    if(res.status===401) throw new Error('No autorizado — vuelve a iniciar sesión.');
+    if(!res.d||!res.d.ok) throw new Error((res.d&&res.d.message)||'Error desconocido');
+    statusEl.style.background='var(--teal)';
+    statusEl.style.color='var(--teal-mid)';
+    statusEl.style.border='1px solid #5DCAA5';
+    statusEl.textContent='✓ config.json publicado en '+repo+' — el dashboard se actualiza en 1-2 minutos';
   })
   .catch(function(err){
     statusEl.style.background='var(--red-light)';
