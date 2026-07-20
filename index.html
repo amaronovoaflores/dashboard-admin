@@ -881,13 +881,48 @@ function putFile(token,owner,repo,path,content,message){
   });
 }
 
+// Igual que putFile() pero para binarios (iconos PNG) — el contenido ya viene
+// en base64 y NO debe pasar por b64Utf8 (eso corrompería los bytes).
+function putFileBinario(token,owner,repo,path,base64Content,message){
+  return ghApi(token,'GET','/repos/'+owner+'/'+repo+'/contents/'+path).then(function(res){
+    var body={message:message,content:base64Content,branch:'main'};
+    if(res.ok && res.data && res.data.sha) body.sha=res.data.sha;
+    return ghApi(token,'PUT','/repos/'+owner+'/'+repo+'/contents/'+path,body);
+  });
+}
+
+function arrayBufferABase64(buffer){
+  var bytes=new Uint8Array(buffer),binary='';
+  for(var i=0;i<bytes.byteLength;i++) binary+=String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}
+
+// manifest.json de instalación PWA, personalizado por cliente (nombre para
+// la pantalla de inicio del celular). Iconos y colores son genéricos de marca.
+function manifestJSON(c){
+  var nombre=c.nombre||'Dashboard Flotas';
+  return JSON.stringify({
+    name:nombre,
+    short_name:nombre.length>12?nombre.slice(0,12):nombre,
+    start_url:'./',
+    scope:'./',
+    display:'standalone',
+    background_color:'#0d1b2a',
+    theme_color:'#0d1b2a',
+    icons:[
+      {src:'icon-192.png',sizes:'192x192',type:'image/png'},
+      {src:'icon-512.png',sizes:'512x512',type:'image/png'}
+    ]
+  },null,2);
+}
+
 function crearRepoCliente(clienteId){
   var c=DB.clientes.find(function(x){return x.id===clienteId;});
   if(!c){alert('Cliente no encontrado');return;}
   if(!c.sub){alert('El cliente no tiene subdominio configurado — edítalo primero.');return;}
   var token=localStorage.getItem('gh_token')||'';
   if(!token){alert('Ingresa tu GitHub Token primero (pestaña Config JSON).');return;}
-  if(!confirm('¿Crear o verificar el repo dashboard-'+c.sub+' en GitHub?\n\nSube: loader (index.html), CNAME, .nojekyll, updater.py y el workflow nocturno, y deja GitHub Pages en modo legacy.\n\nEsto NO borra vehículos ni config.json existentes en ese repo.\n\nNota: si tu token no tiene el permiso "workflow", la subida del archivo .yml fallará (los demás archivos sí quedarán bien).'))
+  if(!confirm('¿Crear o verificar el repo dashboard-'+c.sub+' en GitHub?\n\nSube: loader (index.html), CNAME, .nojekyll, updater.py, workflow nocturno y los archivos de instalación PWA (manifest.json, sw.js, íconos), y deja GitHub Pages en modo legacy.\n\nEsto NO borra vehículos ni config.json existentes en ese repo — es seguro volver a correrlo en un cliente ya creado, por ejemplo solo para agregarle los archivos PWA nuevos.\n\nNota: si tu token no tiene el permiso "workflow", la subida del archivo .yml fallará (los demás archivos sí quedarán bien).'))
     return;
 
   var owner='amaronovoaflores';
@@ -907,17 +942,25 @@ function crearRepoCliente(clienteId){
     return Promise.all([
       fetch('https://raw.githubusercontent.com/'+GH_TEMPLATE_OWNER+'/'+GH_TEMPLATE_REPO+'/main/index.html').then(function(r){return r.text();}),
       fetch('https://raw.githubusercontent.com/'+GH_TEMPLATE_OWNER+'/'+GH_TEMPLATE_REPO+'/main/updater.py').then(function(r){return r.text();}),
-      fetch('https://raw.githubusercontent.com/'+GH_TEMPLATE_OWNER+'/'+GH_TEMPLATE_REPO+'/main/.github/workflows/update_hunter.yml').then(function(r){return r.text();})
+      fetch('https://raw.githubusercontent.com/'+GH_TEMPLATE_OWNER+'/'+GH_TEMPLATE_REPO+'/main/.github/workflows/update_hunter.yml').then(function(r){return r.text();}),
+      fetch('https://raw.githubusercontent.com/'+GH_TEMPLATE_OWNER+'/'+GH_TEMPLATE_REPO+'/main/sw.js').then(function(r){return r.text();}),
+      fetch('https://raw.githubusercontent.com/'+GH_TEMPLATE_OWNER+'/'+GH_TEMPLATE_REPO+'/main/icon-192.png').then(function(r){return r.arrayBuffer();}),
+      fetch('https://raw.githubusercontent.com/'+GH_TEMPLATE_OWNER+'/'+GH_TEMPLATE_REPO+'/main/icon-512.png').then(function(r){return r.arrayBuffer();})
     ]);
   })
   .then(function(templates){
-    var loaderHtml=templates[0], updaterPy=templates[1], workflowYml=templates[2];
-    statusEl.textContent='⏳ Subiendo index.html, CNAME, .nojekyll, updater.py...';
+    var loaderHtml=templates[0], updaterPy=templates[1], workflowYml=templates[2], swJs=templates[3];
+    var icon192=arrayBufferABase64(templates[4]), icon512=arrayBufferABase64(templates[5]);
+    statusEl.textContent='⏳ Subiendo index.html, CNAME, .nojekyll, updater.py, PWA (manifest/sw/íconos)...';
     return Promise.all([
       putFile(token,owner,repo,'index.html',loaderHtml,'Onboarding: loader estandar'),
       putFile(token,owner,repo,'CNAME',c.sub+'.dash.net.pe','Onboarding: CNAME'),
       putFile(token,owner,repo,'.nojekyll','','Onboarding: nojekyll'),
-      putFile(token,owner,repo,'updater.py',updaterPy,'Onboarding: updater generico')
+      putFile(token,owner,repo,'updater.py',updaterPy,'Onboarding: updater generico'),
+      putFile(token,owner,repo,'sw.js',swJs,'Onboarding: service worker PWA'),
+      putFile(token,owner,repo,'manifest.json',manifestJSON(c),'Onboarding: manifest PWA'),
+      putFileBinario(token,owner,repo,'icon-192.png',icon192,'Onboarding: icono PWA 192'),
+      putFileBinario(token,owner,repo,'icon-512.png',icon512,'Onboarding: icono PWA 512')
     ]).then(function(){
       statusEl.textContent='⏳ Subiendo workflow nocturno...';
       return putFile(token,owner,repo,'.github/workflows/update_hunter.yml',workflowYml,'Onboarding: workflow nocturno')
