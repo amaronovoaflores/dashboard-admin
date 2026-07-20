@@ -545,12 +545,13 @@ select.finput{background:white;}
 <script>
 // ── DATOS ──────────────────────────────────────────────────────────────
 var ADMIN_USER='admin';
-// Esta clave es la misma que valida el Worker server-side (secret ADMIN_KEY
-// en flotas-worker) antes de tocar GitHub — es la verificación REAL. Que
-// también esté visible acá (repo público) ya no importa para la seguridad
-// de las escrituras: sin esta clave exacta, el Worker rechaza todo. Rotarla
-// acá y en el Worker (`wrangler secret put ADMIN_KEY`) si hace falta.
-var ADMIN_PASS='PntWfFEvKMFpxo5hfpTBU-QZybNm1Cbr';
+// OJO: la clave NO se compara acá — este repo es público, cualquier valor
+// hardcodeado quedaría expuesto igual que el 'flotas2026' original. La
+// verificación real pasa por el Worker (GET /api/admin/verificar, ver
+// tryLogin()), que compara contra su secret ADMIN_KEY server-side, nunca
+// visible en código. Rotar la clave: solo hace falta
+// `wrangler secret put ADMIN_KEY` en flotas-worker — no hay nada que
+// cambiar acá.
 
 // Worker que hace de proxy autenticado hacia GitHub (crear repo, publicar
 // config.json) y guarda el respaldo de Tareo/Valorización de los clientes.
@@ -650,14 +651,36 @@ document.addEventListener('DOMContentLoaded',function(){
 function tryLogin(){
   var u=$('login-user').value.trim();
   var p=$('login-pass').value.trim();
-  if(u===ADMIN_USER&&p===ADMIN_PASS){
-    localStorage.setItem('admin_session','ok');
-    localStorage.setItem('admin_key',p);
-    mostrarAdmin();
-  } else {
+  $('login-err').style.display='none';
+  if(u!==ADMIN_USER||!p){
     $('login-err').style.display='block';
     $('login-pass').value='';
+    return;
   }
+  var btn=$('login-btn');
+  if(btn){btn.disabled=true;btn.textContent='Verificando…';}
+  // La clave se valida contra el Worker (nunca hay un valor "correcto"
+  // guardado en este código, que es público) — ver nota junto a FLOTAS_WORKER.
+  fetch(FLOTAS_WORKER+'/api/admin/verificar',{headers:{'X-Admin-Key':p}})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d&&d.ok){
+        localStorage.setItem('admin_session','ok');
+        localStorage.setItem('admin_key',p);
+        mostrarAdmin();
+      } else {
+        $('login-err').textContent='Usuario o clave incorrectos.';
+        $('login-err').style.display='block';
+        $('login-pass').value='';
+      }
+    })
+    .catch(function(){
+      $('login-err').textContent='No se pudo verificar (¿sin internet?). Intenta de nuevo.';
+      $('login-err').style.display='block';
+    })
+    .finally(function(){
+      if(btn){btn.disabled=false;btn.textContent='Ingresar';}
+    });
 }
 
 function logout(){
