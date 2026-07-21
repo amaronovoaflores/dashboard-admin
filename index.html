@@ -424,6 +424,13 @@ select.finput{background:white;}
           <option value="inactivo">Inactivo</option>
         </select>
       </div>
+      <div class="form-field">
+        <label class="flbl">Interfaz</label>
+        <label style="display:flex;align-items:center;gap:8px;padding:9px 0;font-size:13px;cursor:pointer;">
+          <input type="checkbox" id="c-modo-simple" style="width:18px;height:18px;">
+          Modo simple (minorista sin experiencia)
+        </label>
+      </div>
     </div>
     <div class="form-section">GPS (aplica a todos los vehículos)</div>
     <div class="form-grid">
@@ -853,6 +860,7 @@ function abrirFormCliente(idx){
   $('c-sub').value=c.sub||'';
   $('c-contrato').value=c.contrato||'';
   $('c-estado').value=c.estado||'activo';
+  $('c-modo-simple').checked=!!c.modoSimple;
   $('c-gps-empresa').value=(c.gps&&c.gps.empresa)||'hunter';
   $('c-gps-user').value=(c.gps&&c.gps.usuario)||'';
   $('c-gps-pass').value=(c.gps&&c.gps.clave)||'';
@@ -947,6 +955,7 @@ function guardarCliente(){
     sub:$('c-sub').value.trim().toLowerCase(),
     contrato:$('c-contrato').value,
     estado:$('c-estado').value,
+    modoSimple:$('c-modo-simple').checked,
     gps:{empresa:$('c-gps-empresa').value,usuario:$('c-gps-user').value,clave:$('c-gps-pass').value},
     cuentas:{bcp:$('c-bcp').value.trim(),cci:$('c-cci').value.trim(),bn:$('c-bn').value.trim()},
     contratistas:_contratistas.filter(function(x){return x.trim();}),
@@ -1408,6 +1417,7 @@ function generarConfig(idx){
     igv:0.18,detraccion:0.10,
     contrato_hasta:c.contrato,
     permisos:c.permisos||PERMISOS_DEF,
+    modo_simple:!!c.modoSimple,
     alertas:[]
   };
 }
